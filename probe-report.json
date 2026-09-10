@@ -1,0 +1,99 @@
+{
+  "generatedAt": "2026-09-10T20:41:31.846Z",
+  "appVersion": "9.3.1",
+  "hosts": [
+    {
+      "host": "ONBOARD",
+      "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
+      "reachable": false,
+      "status": null,
+      "ms": 315,
+      "error": "fetch failed"
+    },
+    {
+      "host": "API",
+      "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
+      "reachable": false,
+      "status": null,
+      "ms": 276,
+      "error": "fetch failed"
+    },
+    {
+      "host": "RECS",
+      "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
+      "reachable": false,
+      "status": null,
+      "ms": 264,
+      "error": "fetch failed"
+    },
+    {
+      "host": "ACTIVITY",
+      "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
+      "reachable": false,
+      "status": null,
+      "ms": 274,
+      "error": "fetch failed"
+    }
+  ],
+  "session": {
+    "refreshTokenPresent": false,
+    "refreshTokenPreview": "(none)",
+    "refreshTokenValid": null,
+    "credentialsAvailable": true,
+    "credentialIdentifierType": "email",
+    "loginAttempted": true,
+    "loginSucceeded": false,
+    "accessTokenPreview": "(none)",
+    "authenticated": false,
+    "userId": null,
+    "loginError": "fetch failed"
+  },
+  "categories": {
+    "skipped": true,
+    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "candidatesTried": [],
+    "results": [],
+    "accepted": []
+  },
+  "listField": {
+    "skipped": true,
+    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "beenIdCount": null,
+    "wantToTryIdCount": null,
+    "candidates": [],
+    "bestBeenCandidate": null,
+    "bestWantToTryCandidate": null,
+    "unresolvedCandidates": []
+  },
+  "facets": {
+    "skipped": true,
+    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "filterConfigs": {
+      "ok": false,
+      "status": null,
+      "topLevelKeys": [],
+      "facetKeys": []
+    },
+    "filterOptions": {
+      "ok": false,
+      "status": null,
+      "topLevelKeys": [],
+      "facetKeys": []
+    }
+  },
+  "recs": {
+    "skipped": true,
+    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "recs": {
+      "ok": false,
+      "status": null,
+      "shape": "not-run",
+      "itemCount": null
+    },
+    "recScore": {
+      "ok": false,
+      "status": null,
+      "shape": "not-run"
+    }
+  }
+}
