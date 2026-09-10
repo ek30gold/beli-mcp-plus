@@ -16,6 +16,19 @@ export interface SessionStore {
   save(state: SessionState): Promise<void> | void;
 }
 
+/**
+ * On-disk shape written by a persistent `SessionStore` (e.g. the MCP server's
+ * `FileSessionStore`): ONLY the refresh token. `SessionState` never carries a
+ * password field in the first place, but disk persistence goes further and
+ * deliberately drops the access token, user id, and access-token expiry too —
+ * those are cheap to re-derive from one `refresh` call on the next run, and
+ * keeping the on-disk footprint to a single long-lived secret minimizes what a
+ * leaked `session.json` (misconfigured permissions, backup, etc.) exposes.
+ */
+export interface PersistedSession {
+  refresh: string | null;
+}
+
 export const emptySession = (): SessionState => ({
   access: null,
   refresh: null,

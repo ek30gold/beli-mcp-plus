@@ -15,6 +15,7 @@ export interface BuiltServer {
 /** Wire up the client, session store, drafts and all tools. */
 export async function buildServer(config: Config = loadConfig()): Promise<BuiltServer> {
   const client = new BeliClient({
+    email: config.email,
     phone: config.phone,
     password: config.password,
     store: new FileSessionStore(config.sessionPath),
@@ -27,7 +28,7 @@ export async function buildServer(config: Config = loadConfig()): Promise<BuiltS
   // Auto-login: when a tool needs auth and no valid session exists, transparently
   // launch the browser login popup (unless running headless). Skipped when creds
   // are provided (the client logs in headlessly via those instead).
-  if (!config.noBrowser && !(config.phone && config.password)) {
+  if (!config.noBrowser && !((config.email || config.phone) && config.password)) {
     client.setOnAuthRequired(async () => {
       await ctx.interactiveLogin();
     });

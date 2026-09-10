@@ -1,5 +1,6 @@
 import {
   endpoints,
+  LoginRequest,
   SENTIMENT_VALUE,
   type Category,
   type EndpointId,
@@ -7,7 +8,7 @@ import {
   type Sentiment,
 } from "@beli/contract";
 import type { z } from "zod";
-import { baseHeaders, BeliApiError, buildUrl } from "./http.js";
+import { baseHeaders, BeliApiError, buildUrl, redactPasswordField } from "./http.js";
 import {
   emptySession,
   MemorySessionStore,
@@ -17,6 +18,8 @@ import {
 } from "./session.js";
 
 export interface BeliClientOptions {
+  /** Exactly one of `email`/`phone` should be supplied alongside `password`. */
+  email?: string;
   phone?: string;
   password?: string;
   /** Pluggable persistence so one login survives across runs. */
@@ -39,6 +42,13 @@ interface RequestOpts {
 }
 
 type ResponseOf<K extends EndpointId> = z.infer<Endpoints[K]["response"]>;
+
+/** Credentials for `login()`. Exactly one of `email`/`phone` must be set. */
+export interface LoginCredentials {
+  email?: string;
+  phone?: string;
+  password: string;
+}
 
 const ACCESS_SKEW_SECONDS = 120;
 
@@ -77,24 +87,44 @@ export class BeliClient {
 
   // ---- auth ----
   /**
-   * Exchange phone + password for tokens and persist them. Credentials may be
-   * supplied here (e.g. from an interactive login) or via constructor options;
-   * they are used once and never stored — only the resulting tokens are saved.
+   * Exchange email-or-phone + password for tokens and persist them. Credentials
+   * may be supplied here (e.g. from an interactive login) or via constructor
+   * options; they are used once and never stored — only the resulting tokens
+   * are saved (see SessionStore / FileSessionStore).
+   *
+   * Exactly one of `email`/`phone` must resolve; supplying both or neither is
+   * a clean thrown Error (checked here) and a malformed identifier is a clean
+   * zod validation error (checked by `LoginRequest.parse` below) — neither
+   * path reaches `fetch()` or throws an unhandled exception.
    */
-  async login(creds?: { phone: string; password: string }): Promise<void> {
+  async login(creds?: LoginCredentials): Promise<void> {
+    const email = creds?.email ?? this.opts.email;
     const phone = creds?.phone ?? this.opts.phone;
     const password = creds?.password ?? this.opts.password;
-    if (!phone || !password) {
-      throw new Error("login requires phone + password");
+    if (!password) {
+      throw new Error("login requires a password");
     }
+    if (Boolean(email) === Boolean(phone)) {
+      throw new Error(
+        email
+          ? "login requires exactly one of email or phone, not both"
+          : "login requires email or phone",
+      );
+    }
+    const body = email ? { email, password } : { phone_no: phone!, password };
+    // Validates E.164/email shape up front so a malformed identifier fails
+    // fast and locally instead of round-tripping to the API.
+    const payload = LoginRequest.parse(body);
     const e = endpoints.login;
     const res = await fetch(buildUrl(e.host, e.path), {
       method: "POST",
       headers: { ...baseHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ phone_no: phone, password }),
+      body: JSON.stringify(payload),
     });
     const text = await res.text();
-    if (!res.ok) throw new BeliApiError(res.status, e.id, text);
+    // Never let a submitted password surface in a thrown error (which the CLI
+    // and MCP tool results may print) even if the API echoed it back.
+    if (!res.ok) throw new BeliApiError(res.status, e.id, redactPasswordField(text));
     const tok = e.response.parse(JSON.parse(text));
     const claims = readAccessClaims(tok.access);
     this.state = {
@@ -162,7 +192,7 @@ export class BeliClient {
         /* refresh token expired/invalid — fall through */
       }
     }
-    if (this.opts.phone && this.opts.password) {
+    if ((this.opts.email || this.opts.phone) && this.opts.password) {
       try {
         await this.login();
         return true;

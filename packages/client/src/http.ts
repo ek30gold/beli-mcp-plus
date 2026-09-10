@@ -12,6 +12,27 @@ export class BeliApiError extends Error {
   }
 }
 
+/**
+ * Defense-in-depth for the login endpoint: if Beli's API ever echoed a
+ * submitted field back in an error body (naive validation-error responses
+ * sometimes do this), a raw `password` value must never reach a thrown
+ * error's `message` — which callers (CLI, MCP tool results, logs) may print
+ * at any log level. Strips any top-level `"password"` value out of a JSON (or
+ * JSON-ish) response body before it's used to build an error message.
+ */
+export function redactPasswordField(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(parsed, "password")) {
+      parsed.password = "[redacted]";
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    // Not JSON (or malformed) — fall back to a best-effort text redaction.
+    return text.replace(/("password"\s*:\s*)"(?:[^"\\]|\\.)*"/gi, '$1"[redacted]"');
+  }
+}
+
 const USER_AGENT =
   "Mozilla/5.0 (Linux; Android 16; SM-S928U) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/149.0.7827.91 Mobile Safari/537.36";

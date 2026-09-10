@@ -15,8 +15,9 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const HOST = "127.0.0.1";
 
 /**
- * Spin up a one-shot localhost login page. The user enters phone + password in
- * their browser; we validate against Beli before persisting ONLY the tokens.
+ * Spin up a one-shot localhost login page. The user enters an email OR phone
+ * number, plus their password, in their browser; we validate against Beli
+ * before persisting ONLY the refresh token.
  * Client-agnostic (works for Claude Desktop, Cursor, CLI, etc.) — no env vars.
  *
  * If a `client` is supplied, we log into THAT client so a running MCP server
@@ -93,11 +94,19 @@ export function runInteractiveLogin(
           res.writeHead(403).end("forbidden");
           return;
         }
-        // Normalize obvious separators; keep '+' and digits (E.164).
-        const phone = (form.get("phone") ?? "").replace(/[\s()-]/g, "");
+        // A single "email or phone" field: '@' means email, otherwise treat it
+        // as a phone number (normalizing obvious separators; keep '+' and digits).
+        const identifier = (form.get("identifier") ?? "").trim();
         const password = form.get("password") ?? "";
-        if (!phone || !password) {
-          sendHtml(res, 400, loginPage(nonce, "Phone and password are required."));
+        const isEmail = identifier.includes("@");
+        const email = isEmail ? identifier : "";
+        const phone = isEmail ? "" : identifier.replace(/[\s()-]/g, "");
+        if (!identifier || !password) {
+          sendHtml(
+            res,
+            400,
+            loginPage(nonce, "Email or phone, and password, are required."),
+          );
           return;
         }
         // We're committing to a login attempt: disarm the idle timeout so it
@@ -105,12 +114,14 @@ export function runInteractiveLogin(
         clearTimeout(timer);
         try {
           await beli.init();
-          await beli.login({ phone, password }); // validates + persists tokens
+          // validates + persists tokens
+          await beli.login(isEmail ? { email, password } : { phone, password });
         } catch (err) {
           const status = (err as { status?: number })?.status;
           const msg =
             status === 401 || status === 400
-              ? "Invalid phone or password. Use international format, e.g. +15551234567."
+              ? "Invalid email/phone or password. Use international format for " +
+                "phone numbers, e.g. +15551234567."
               : `Login failed: ${(err as Error).message}`;
           // Re-arm the idle timeout so the user still gets a retry window.
           timer = setTimeout(onTimeout, LOGIN_TIMEOUT_MS);

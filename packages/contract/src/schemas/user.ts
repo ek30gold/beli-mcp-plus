@@ -2,13 +2,33 @@ import { z } from "zod";
 import { IntId, PlaceId, Uuid } from "./common.js";
 
 /**
- * Auth (DRF SimpleJWT). Login is by PHONE NUMBER (E.164), not email.
+ * Auth (DRF SimpleJWT). Beli's `POST /api/token/` accepts EITHER an email or a
+ * phone-number (E.164) identifier alongside the password — upstream jcjc-dev/
+ * beli-mcp only ever sent phone_no. Each shape is `.strict()` so a body cannot
+ * mix the two identifiers, and the union enforces "exactly one of email or
+ * phone_no, not both, not neither" as a clean zod validation error rather than
+ * a runtime crash: a body with both keys fails BOTH branches (the extra key is
+ * rejected by strict mode) and a body with neither fails both (the required
+ * identifier key is missing).
  * The gateway also requires a browser-like User-Agent + Referer or it 403s.
  */
-export const LoginRequest = z.object({
-  phone_no: z.string().regex(/^\+\d{8,15}$/, "expected E.164 phone, e.g. +15551234567"),
-  password: z.string().min(1),
-});
+export const EmailLoginRequest = z
+  .object({
+    email: z.string().email("expected a valid email address"),
+    password: z.string().min(1),
+  })
+  .strict();
+export type EmailLoginRequest = z.infer<typeof EmailLoginRequest>;
+
+export const PhoneLoginRequest = z
+  .object({
+    phone_no: z.string().regex(/^\+\d{8,15}$/, "expected E.164 phone, e.g. +15551234567"),
+    password: z.string().min(1),
+  })
+  .strict();
+export type PhoneLoginRequest = z.infer<typeof PhoneLoginRequest>;
+
+export const LoginRequest = z.union([EmailLoginRequest, PhoneLoginRequest]);
 export type LoginRequest = z.infer<typeof LoginRequest>;
 
 /** Access token lives ~20 min; refresh token ~7 days (refresh is NOT rotated). */

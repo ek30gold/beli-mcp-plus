@@ -39,8 +39,8 @@ export function loginPage(nonce: string, error?: string): string {
       `Your password is sent only to Beli and never stored.</p>` +
       `<form method="POST" action="/submit">` +
       `<input type="hidden" name="nonce" value="${escapeHtml(nonce)}">` +
-      `<label for="phone">Phone number</label>` +
-      `<input id="phone" name="phone" inputmode="tel" placeholder="+1XXXXXXXXXX" autofocus required>` +
+      `<label for="identifier">Email or phone number</label>` +
+      `<input id="identifier" name="identifier" placeholder="you@example.com or +1XXXXXXXXXX" autofocus required>` +
       `<label for="password">Password</label>` +
       `<input id="password" name="password" type="password" required>` +
       `<button type="submit">Sign in</button>` +
