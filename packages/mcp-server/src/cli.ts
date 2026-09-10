@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   const { server } = await buildServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write("beli-mcp ready on stdio\n");
+  process.stderr.write("beli-mcp-plus ready on stdio\n");
 }
 
 main().catch((err) => {

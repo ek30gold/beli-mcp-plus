@@ -34,8 +34,8 @@ export async function buildServer(config: Config = loadConfig()): Promise<BuiltS
   }
 
   const server = new McpServer({
-    name: "beli-mcp",
-    version: "0.2.0",
+    name: "beli-mcp-plus",
+    version: "0.1.0",
   });
   registerAllTools(server, ctx);
 
