@@ -128,6 +128,7 @@ Login is by **phone number** (E.164), not email.
 | `business_detail` | read | Full business details by id. |
 | `get_been` | read | A user's ranked "Been" list. |
 | `get_want_to_try` | read | A user's "Want to Try" bookmarks. |
+| `search_list` | read | Search/filter Been or Want-to-Try by name, city, neighborhood, cuisine, price, score. |
 | `rank_place` | **write** | Create a ranked review (score is computed by Beli). |
 | `upload_photo` | **write** | Upload a photo for a business from a local file. |
 | `list_photos` | read | List your photos for a business. |
@@ -135,6 +136,26 @@ Login is by **phone number** (E.164), not email.
 | `bookmark` / `unbookmark` | **write** | Add/remove from "Want to Try". |
 | `draft_*` | local | Compose a review offline and `draft_submit` it atomically. |
 | `beli_doctor` | read | Diagnostics: host reachability, session/auth state, and endpoint probes. |
+
+### A note on `search_list`
+
+Filtering runs **client-side**: the tool fetches the category's list via
+`get-ranking` / `get-bookmark` and filters in process. So each call costs one
+full-category fetch, and only the fields those endpoints return can be filtered
+on. Beli's own `filter-list` endpoint would do this server-side, but the
+`list_field` value that selects each personal list has never been established —
+see `docs/api-discovery.md`.
+
+Rows missing the field a bound is set on are excluded rather than kept. A score
+bound therefore returns nothing from Want to Try, which has no scores.
+
+### Behind a proxy
+
+Node's `fetch` ignores `HTTPS_PROXY` unless told. The server installs proxy
+support automatically when the optional `undici` dependency is present; without
+it, set `NODE_USE_ENV_PROXY=1` (Node >= 22.21). If a proxy is configured and
+neither is available the server warns on startup rather than silently bypassing
+it — requests that bypass a proxy fail in ways that look like the API is down.
 
 ## Diagnostics
 
@@ -165,6 +186,7 @@ the server with `BELI_ALLOW_WRITES=1`, or pass `confirm: true` on each write cal
 | `BELI_SESSION_PATH` | `$BELI_HOME/session.json` | session file path |
 | `BELI_MIN_INTERVAL_MS` | `350` | politeness throttle between API calls |
 | `BELI_PROBE_OUTPUT` | `./probe-report.json` | where `probe` writes its machine-readable report |
+| `NODE_USE_ENV_PROXY` | – | set `1` on Node >= 22.21 to route requests through `HTTPS_PROXY` |
 
 ## License
 
