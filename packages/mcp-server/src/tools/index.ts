@@ -3,7 +3,7 @@ import type { AppContext } from "../context.js";
 import { registerAuthTools } from "./auth.js";
 import { registerDiscoveryTools } from "./discovery.js";
 import { registerDoctorTools } from "./doctor.js";
-import { registerListTools } from "./lists.js";
+import { registerListSearchTools, registerListTools } from "./lists.js";
 import { registerReviewTools } from "./reviews.js";
 import { registerPhotoTools } from "./photos.js";
 import { registerBookmarkTools } from "./bookmarks.js";
@@ -13,6 +13,7 @@ export function registerAllTools(server: McpServer, ctx: AppContext): void {
   registerAuthTools(server, ctx);
   registerDiscoveryTools(server, ctx);
   registerListTools(server, ctx);
+  registerListSearchTools(server, ctx);
   registerReviewTools(server, ctx);
   registerPhotoTools(server, ctx);
   registerBookmarkTools(server, ctx);

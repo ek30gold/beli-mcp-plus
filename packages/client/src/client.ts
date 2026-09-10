@@ -10,6 +10,14 @@ import {
 import type { z } from "zod";
 import { baseHeaders, BeliApiError, buildUrl, redactPasswordField } from "./http.js";
 import {
+  filterListEntries,
+  normalizeBeen,
+  normalizeWantToTry,
+  type ListEntry,
+  type ListFilter,
+  type ListName,
+} from "./lists.js";
+import {
   emptySession,
   MemorySessionStore,
   readAccessClaims,
@@ -367,6 +375,30 @@ export class BeliClient {
     return this.request("getBookmark", {
       query: { user: user ?? this.requireUserId(), category },
     });
+  }
+
+  /**
+   * Search and filter one of the personal lists.
+   *
+   * Fetches the category's list through the endpoints already known to work and
+   * filters in process — see the header of lists.ts for why this is client-side
+   * and what would change if `filter-list`'s `list_field` were ever established.
+   *
+   * Costs one upstream request per call regardless of how narrow the filter is,
+   * so callers that filter the same list repeatedly should fetch once and use
+   * `filterListEntries` directly.
+   */
+  async searchList(
+    list: ListName,
+    category: Category = "RES",
+    filter: ListFilter = {},
+    user?: string,
+  ): Promise<ListEntry[]> {
+    const entries =
+      list === "been"
+        ? normalizeBeen(await this.getBeen(category, user))
+        : normalizeWantToTry(await this.getWantToTry(category, user));
+    return filterListEntries(entries, filter);
   }
 
   // ---- reviews ----

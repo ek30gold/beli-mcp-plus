@@ -17,3 +17,13 @@ export {
   type ProxyMode,
   type ProxyStatus,
 } from "./proxy.js";
+export {
+  filterListEntries,
+  normalizeBeen,
+  normalizeWantToTry,
+  sortListEntries,
+  type ListEntry,
+  type ListFilter,
+  type ListName,
+  type ListSort,
+} from "./lists.js";

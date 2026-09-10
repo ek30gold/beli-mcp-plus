@@ -139,3 +139,47 @@ Do **not** read this run as evidence that `filter-list` cannot serve the persona
 and do **not** default to a client-side fetch-and-filter backend on the strength of it.
 That decision requires positive evidence that `filter-list` fails at the task. This run
 produced no evidence either way. The question is untested, not answered.
+
+---
+
+## Follow-up: what was built while the API stayed unreachable (2026-09-10)
+
+Two things happened after the run above, neither of which changes any finding.
+
+### The probe now names the block
+
+Both diagnostics defects described earlier are fixed. `detectEgressBlockFromError`
+walks a thrown error's `cause` chain for undici's
+`Proxy response (403) !== 200 when HTTP Tunneling`, and `errInfo` applies it
+everywhere the probe renders an error, so login and refresh failures name the
+policy too. `installProxySupport` makes the process actually use `HTTPS_PROXY`
+(deferring to `NODE_USE_ENV_PROXY`, else undici's `EnvHttpProxyAgent`, else
+warning loudly). A 502 from the proxy stays unclassified — an upstream failure
+has a different remedy than an allowlist miss.
+
+Verified against this session's live 403-on-CONNECT proxy: all four hosts now
+report `BLOCKED BY EGRESS POLICY`, and the skip reasons point at the allowlist
+instead of telling the reader to set credentials that are already set.
+
+### List search is client-side, and `filter-list` stays pluggable
+
+`search_list` filters the personal lists over the rows `GET /api/get-ranking/`
+and `GET /api/get-bookmark/` return — endpoints that were already proven — with
+the matching, sorting and paging done in process.
+
+**This is not a finding that `POST /api/filter-list/` cannot serve the personal
+lists.** That remains untested, exactly as the table above says. It is a choice
+to stop blocking a shippable feature on an unknown that only live access can
+resolve. The trade is explicit: one full-category fetch per call, and filtering
+limited to the fields those endpoints return.
+
+If and when `list_field` is established, a server-side backend can sit behind
+the same `ListFilter` shape and be selected at runtime. Nothing in the current
+code assumes the endpoint is unusable, and nothing should be read that way.
+
+Two deliberate semantics worth knowing, both covered by tests: a row with no
+price is excluded when a price bound is set, and a row with no score is excluded
+when a score bound is set — so any score bound empties a Want-to-Try list, which
+has no scores at all. Keeping such rows would report an unscored place as
+clearing a score floor it was never measured against.
+
