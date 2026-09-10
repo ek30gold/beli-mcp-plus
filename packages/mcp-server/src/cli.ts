@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { installProxySupport } from "@beli/client";
 import { runCli } from "./cli-dispatch.js";
 import { loadConfig } from "./config.js";
 import { buildServer } from "./server.js";
@@ -27,6 +28,12 @@ import { buildServer } from "./server.js";
  * the process entrypoint.
  */
 async function main(): Promise<void> {
+  // Do this before any HTTP happens. Node's fetch ignores HTTPS_PROXY on its
+  // own, so on a proxied network every request would otherwise bypass the proxy
+  // and fail with an error that blames the network instead of the config.
+  const proxy = await installProxySupport();
+  if (proxy.warning) process.stderr.write(`beli-mcp warning: ${proxy.warning}\n`);
+
   const config = loadConfig();
   const outcome = await runCli(process.argv.slice(2), config);
   if (outcome === "start-server") {

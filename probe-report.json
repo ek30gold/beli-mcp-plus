@@ -1,38 +1,46 @@
 {
-  "generatedAt": "2026-09-10T20:41:31.846Z",
+  "generatedAt": "2026-09-10T21:12:17.265Z",
   "appVersion": "9.3.1",
+  "proxy": {
+    "mode": "undici-agent",
+    "proxyUrl": "http://127.0.0.1:43145"
+  },
   "hosts": [
     {
       "host": "ONBOARD",
       "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 315,
-      "error": "fetch failed"
+      "ms": 310,
+      "blockedByEgress": true,
+      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
     {
       "host": "API",
       "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 276,
-      "error": "fetch failed"
+      "ms": 303,
+      "blockedByEgress": true,
+      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
     {
       "host": "RECS",
       "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 264,
-      "error": "fetch failed"
+      "ms": 435,
+      "blockedByEgress": true,
+      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
     {
       "host": "ACTIVITY",
       "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
       "reachable": false,
       "status": null,
-      "ms": 274,
-      "error": "fetch failed"
+      "ms": 214,
+      "blockedByEgress": true,
+      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     }
   ],
   "session": {
@@ -46,18 +54,18 @@
     "accessTokenPreview": "(none)",
     "authenticated": false,
     "userId": null,
-    "loginError": "fetch failed"
+    "loginError": "blocked by network egress policy (proxy refused CONNECT tunnel with 403) — the host is not in this environment's allowed domains"
   },
   "categories": {
     "skipped": true,
-    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
     "candidatesTried": [],
     "results": [],
     "accepted": []
   },
   "listField": {
     "skipped": true,
-    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
     "beenIdCount": null,
     "wantToTryIdCount": null,
     "candidates": [],
@@ -67,7 +75,7 @@
   },
   "facets": {
     "skipped": true,
-    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
     "filterConfigs": {
       "ok": false,
       "status": null,
@@ -83,7 +91,7 @@
   },
   "recs": {
     "skipped": true,
-    "skipReason": "not authenticated — no valid refresh token and no usable credentials (set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)",
+    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
     "recs": {
       "ok": false,
       "status": null,

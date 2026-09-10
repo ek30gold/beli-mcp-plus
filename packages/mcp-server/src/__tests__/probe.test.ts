@@ -6,6 +6,7 @@ import { BeliClient, MemorySessionStore } from "@beli/client";
 import { loadConfig } from "../config.js";
 import {
   detectEgressBlock,
+  detectEgressBlockFromError,
   extractListFieldHints,
   formatHumanReport,
   redact,
@@ -215,5 +216,65 @@ describe("detectEgressBlock", () => {
   it("ignores non-403/407 statuses entirely", async () => {
     expect(await detectEgressBlock(res(200, "not in allowlist"))).toBeNull();
     expect(await detectEgressBlock(res(404, "not in allowlist"))).toBeNull();
+  });
+});
+
+describe("detectEgressBlockFromError", () => {
+  /**
+   * The real shape undici produces when a proxy refuses the CONNECT tunnel,
+   * captured from a live 403-on-CONNECT: a TypeError whose cause chain ends in
+   * an AbortError naming the proxy status.
+   */
+  const tunnelRejection = (status: number): Error => {
+    const inner = Object.assign(new Error(`Proxy response (${status}) !== 200 when HTTP Tunneling`), {
+      name: "AbortError",
+      code: "UND_ERR_ABORTED",
+    });
+    const mid = Object.assign(new Error("Request was cancelled."), { cause: inner });
+    return Object.assign(new TypeError("fetch failed"), { cause: mid });
+  };
+
+  it("detects a 403 CONNECT refusal nested two causes deep", () => {
+    expect(detectEgressBlockFromError(tunnelRejection(403))).toBe(
+      "proxy refused CONNECT tunnel with 403",
+    );
+  });
+
+  it("detects a 407 CONNECT refusal", () => {
+    expect(detectEgressBlockFromError(tunnelRejection(407))).toBe(
+      "proxy refused CONNECT tunnel with 407",
+    );
+  });
+
+  it("does NOT treat a 502 from the proxy as a policy block", () => {
+    // An upstream failure is a different problem with a different remedy.
+    expect(detectEgressBlockFromError(tunnelRejection(502))).toBeNull();
+  });
+
+  it("returns null for an ordinary network failure", () => {
+    const dns = Object.assign(new TypeError("fetch failed"), {
+      cause: Object.assign(new Error("getaddrinfo ENOTFOUND example.invalid"), {
+        code: "ENOTFOUND",
+      }),
+    });
+    expect(detectEgressBlockFromError(dns)).toBeNull();
+  });
+
+  it("returns null for a plain timeout", () => {
+    expect(detectEgressBlockFromError(new Error("The operation was aborted"))).toBeNull();
+  });
+
+  it("survives a cyclic cause chain without hanging", () => {
+    const a = new Error("a") as Error & { cause?: unknown };
+    const b = new Error("b") as Error & { cause?: unknown };
+    a.cause = b;
+    b.cause = a;
+    expect(detectEgressBlockFromError(a)).toBeNull();
+  });
+
+  it("tolerates non-Error throws", () => {
+    expect(detectEgressBlockFromError("something went wrong")).toBeNull();
+    expect(detectEgressBlockFromError(null)).toBeNull();
+    expect(detectEgressBlockFromError(undefined)).toBeNull();
   });
 });

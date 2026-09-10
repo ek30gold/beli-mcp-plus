@@ -14,7 +14,12 @@
  * name plausibility. A candidate named "BEEN" whose ids overlap the bookmark
  * list is a Want-to-Try field, and this module reports it that way.
  */
-import { BeliApiError, type BeliClient } from "@beli/client";
+import {
+  BeliApiError,
+  installProxySupport,
+  type BeliClient,
+  type ProxyStatus,
+} from "@beli/client";
 import { Category, HOSTS, META, type HostKey } from "@beli/contract";
 import type { Config } from "./config.js";
 
@@ -33,6 +38,16 @@ export function redact(value: string | null | undefined, keep = 10): string {
 function errInfo(err: unknown): { status: number | null; message: string } {
   if (err instanceof BeliApiError) {
     return { status: err.status, message: err.message.slice(0, 400) };
+  }
+  // A proxy refusing the CONNECT tunnel surfaces here as a bare "fetch failed",
+  // which sends the reader hunting for a credential or network problem that
+  // does not exist. Name the real cause wherever an error is rendered.
+  const block = detectEgressBlockFromError(err);
+  if (block) {
+    return {
+      status: null,
+      message: `blocked by network egress policy (${block}) — the host is not in this environment's allowed domains`,
+    };
   }
   if (err instanceof Error) return { status: null, message: err.message.slice(0, 400) };
   return { status: null, message: String(err).slice(0, 400) };
@@ -141,6 +156,12 @@ export type RecsShape = "curated-list" | "score-map" | "empty" | "unknown" | "no
 export interface ProbeReport {
   generatedAt: string;
   appVersion: string;
+  /**
+   * How this process is routing outbound HTTPS. Recorded because a proxy that
+   * is configured but unused turns every host into a spurious "unreachable",
+   * and the report is the first place anyone looks when that happens.
+   */
+  proxy: ProxyStatus;
   hosts: HostReachability[];
   session: SessionProbe;
   categories: {
@@ -209,6 +230,52 @@ export async function detectEgressBlock(res: Response): Promise<string | null> {
   return body.replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
+/**
+ * Recognise a proxy-origin refusal that arrives as a *thrown error* rather than
+ * a response.
+ *
+ * A default-deny proxy can refuse a host in two quite different ways, and the
+ * response-based {@link detectEgressBlock} above only sees the first:
+ *
+ *  1. It answers the request with its own 403/407 body — a real `Response`.
+ *  2. It refuses the CONNECT tunnel outright. For an HTTPS URL this is the
+ *     usual case, and no response ever exists: undici raises
+ *     `TypeError: fetch failed` whose nested cause reads
+ *     `Proxy response (403) !== 200 when HTTP Tunneling`.
+ *
+ * Case 2 previously fell through to the generic catch and was reported as
+ * `UNREACHABLE — fetch failed`, which points at the wrong problem entirely: the
+ * host is fine, the egress policy is not. Only 403 and 407 count as a policy
+ * denial — a 502 from the proxy is an upstream failure, not an allowlist miss.
+ */
+export function detectEgressBlockFromError(err: unknown): string | null {
+  const seen = new Set<unknown>();
+  let cur: unknown = err;
+  for (let depth = 0; cur && depth < 8; depth++) {
+    if (seen.has(cur)) break;
+    seen.add(cur);
+    const message = cur instanceof Error ? cur.message : String(cur);
+
+    const tunnel = message.match(
+      /Proxy response \((\d{3})\) !== 200 when HTTP Tunneling/i,
+    );
+    if (tunnel) {
+      const status = Number(tunnel[1]);
+      if (status === 403 || status === 407) {
+        return `proxy refused CONNECT tunnel with ${status}`;
+      }
+      return null;
+    }
+
+    if (/\b(407|proxy authentication required)\b/i.test(message)) {
+      return "proxy demanded authentication (407)";
+    }
+
+    cur = (cur as { cause?: unknown } | null)?.cause;
+  }
+  return null;
+}
+
 async function probeHost(host: HostKey, timeoutMs = 5000): Promise<HostReachability> {
   const url = HOSTS[host];
   const start = Date.now();
@@ -241,6 +308,20 @@ async function probeHost(host: HostKey, timeoutMs = 5000): Promise<HostReachabil
     // host is up and routable from here.
     return { host, url, reachable: true, status: res.status, ms: Date.now() - start };
   } catch (err) {
+    // No response at all. Before calling the host unreachable, check whether
+    // the proxy refused the tunnel — that is a policy block, not a dead host.
+    const block = detectEgressBlockFromError(err);
+    if (block) {
+      return {
+        host,
+        url,
+        reachable: false,
+        status: null,
+        ms: Date.now() - start,
+        blockedByEgress: true,
+        error: `blocked by network egress policy (${block})`,
+      };
+    }
     return {
       host,
       url,
@@ -701,6 +782,11 @@ export interface RunProbeOptions {
 export async function runProbe({ client, config, throttle }: RunProbeOptions): Promise<ProbeReport> {
   const tick = throttle ?? makeThrottle(config.minIntervalMs);
 
+  // Step 0 — make sure a configured proxy is actually in use before we judge
+  // any host unreachable. Installing it here (rather than only at CLI start)
+  // keeps `beli_doctor` honest when the probe runs inside the MCP server.
+  const proxy = await installProxySupport();
+
   // Step 1 — always runs, never depends on auth.
   const hosts = await probeHosts();
 
@@ -708,9 +794,17 @@ export async function runProbe({ client, config, throttle }: RunProbeOptions): P
   const session = await probeSession(client, config);
 
   const userId = session.userId;
+  // When the hosts are blocked, authentication could never have succeeded no
+  // matter how the credentials were set. Saying "set BELI_EMAIL" in that case
+  // sends the reader to fix something that is already correct.
+  const blockedHosts = hosts.filter((h) => h.blockedByEgress);
   const notAuthReason = !userId
-    ? "not authenticated — no valid refresh token and no usable credentials " +
-      "(set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)"
+    ? blockedHosts.length > 0
+      ? `could not authenticate — ${blockedHosts.length} of ${hosts.length} Beli hosts are ` +
+        "blocked by this environment's network egress policy. Add them to the " +
+        "environment's allowed domains; no credential change will help until then."
+      : "not authenticated — no valid refresh token and no usable credentials " +
+        "(set BELI_EMAIL or BELI_PHONE + BELI_PASSWORD, or run `beli-mcp-plus login`)"
     : undefined;
 
   // Steps 3-6 all need an authenticated uuid; skip cleanly (not a crash) when absent.
@@ -781,6 +875,7 @@ export async function runProbe({ client, config, throttle }: RunProbeOptions): P
   return {
     generatedAt: new Date().toISOString(),
     appVersion: META.appVersion,
+    proxy,
     hosts,
     session,
     categories,
@@ -855,6 +950,12 @@ export function formatHumanReport(report: ProbeReport): string {
   lines.push("-".repeat(60));
   lines.push("1. HOST REACHABILITY");
   lines.push("-".repeat(60));
+  if (report.proxy.mode !== "none") {
+    lines.push(`  proxy: ${report.proxy.mode} ${report.proxy.proxyUrl ?? ""}`.trimEnd());
+  }
+  if (report.proxy.warning) {
+    lines.push(`  WARNING: ${report.proxy.warning}`);
+  }
   for (const h of report.hosts) {
     lines.push(
       `  ${h.host.padEnd(9)} ${

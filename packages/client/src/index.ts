@@ -11,3 +11,9 @@ export {
   MemorySessionStore,
   emptySession,
 } from "./session.js";
+export {
+  installProxySupport,
+  redactProxyUrl,
+  type ProxyMode,
+  type ProxyStatus,
+} from "./proxy.js";
