@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../context.js";
 import { registerAuthTools } from "./auth.js";
 import { registerDiscoveryTools } from "./discovery.js";
+import { registerDoctorTools } from "./doctor.js";
 import { registerListTools } from "./lists.js";
 import { registerReviewTools } from "./reviews.js";
 import { registerPhotoTools } from "./photos.js";
@@ -16,4 +17,5 @@ export function registerAllTools(server: McpServer, ctx: AppContext): void {
   registerPhotoTools(server, ctx);
   registerBookmarkTools(server, ctx);
   registerDraftTools(server, ctx);
+  registerDoctorTools(server, ctx);
 }

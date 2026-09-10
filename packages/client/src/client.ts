@@ -85,6 +85,26 @@ export class BeliClient {
     return Boolean(this.state.access || this.state.refresh);
   }
 
+  /**
+   * A short, non-secret preview of the current access token (its first 12
+   * characters + an ellipsis), for diagnostics/logging. The full token is
+   * never exposed through this getter — callers that need the raw token use
+   * `request()`, which attaches it internally.
+   */
+  get accessTokenPreview(): string | null {
+    return this.state.access ? `${this.state.access.slice(0, 12)}…` : null;
+  }
+
+  /** Same redaction as `accessTokenPreview`, for the long-lived refresh token. */
+  get refreshTokenPreview(): string | null {
+    return this.state.refresh ? `${this.state.refresh.slice(0, 12)}…` : null;
+  }
+
+  /** Whether a refresh token is present in the current (in-memory) session state. */
+  hasRefreshToken(): boolean {
+    return Boolean(this.state.refresh);
+  }
+
   // ---- auth ----
   /**
    * Exchange email-or-phone + password for tokens and persist them. Credentials

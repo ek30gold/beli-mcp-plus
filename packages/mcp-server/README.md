@@ -134,6 +134,19 @@ Login is by **phone number** (E.164), not email.
 | `delete_photo` | **write** | Soft-delete a photo. |
 | `bookmark` / `unbookmark` | **write** | Add/remove from "Want to Try". |
 | `draft_*` | local | Compose a review offline and `draft_submit` it atomically. |
+| `beli_doctor` | read | Diagnostics: host reachability, session/auth state, and endpoint probes. |
+
+## Diagnostics
+
+```bash
+npx beli-mcp probe
+```
+
+Runs read-only checks against the Beli API — host reachability, session/auth
+state, the accepted `category` values, resolved discovery-endpoint fields,
+facet configs, and the recs endpoints' response shape — and prints a report
+(also written to `probe-report.json`). Never mutates your account. The same
+checks are available as the `beli_doctor` MCP tool. See also `beli-mcp --help`.
 
 ## Write safety
 
@@ -151,6 +164,7 @@ the server with `BELI_ALLOW_WRITES=1`, or pass `confirm: true` on each write cal
 | `BELI_HOME` | `~/.beli` | base dir for session + drafts |
 | `BELI_SESSION_PATH` | `$BELI_HOME/session.json` | session file path |
 | `BELI_MIN_INTERVAL_MS` | `350` | politeness throttle between API calls |
+| `BELI_PROBE_OUTPUT` | `./probe-report.json` | where `probe` writes its machine-readable report |
 
 ## License
 
