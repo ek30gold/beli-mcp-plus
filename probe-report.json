@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-10T21:12:17.265Z",
+  "generatedAt": "2026-09-10T21:26:01.841Z",
   "appVersion": "9.3.1",
   "proxy": {
     "mode": "undici-agent",
-    "proxyUrl": "http://127.0.0.1:43145"
+    "proxyUrl": "http://127.0.0.1:35521"
   },
   "hosts": [
     {
@@ -11,7 +11,7 @@
       "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 310,
+      "ms": 328,
       "blockedByEgress": true,
       "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
@@ -20,7 +20,7 @@
       "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 303,
+      "ms": 252,
       "blockedByEgress": true,
       "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
@@ -29,7 +29,7 @@
       "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
       "reachable": false,
       "status": null,
-      "ms": 435,
+      "ms": 268,
       "blockedByEgress": true,
       "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     },
@@ -38,7 +38,7 @@
       "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
       "reachable": false,
       "status": null,
-      "ms": 214,
+      "ms": 262,
       "blockedByEgress": true,
       "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
     }

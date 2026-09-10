@@ -208,6 +208,17 @@ export const LIST_FIELD_CANDIDATES: readonly string[] = [
 
 const OVERLAP_THRESHOLD = 0.5;
 
+/**
+ * How much better a candidate's overlap with one list must be than its overlap
+ * with the other before we call it a resolution.
+ *
+ * Without this, a candidate returning a 50/50 mix of Been and Want-to-Try ids
+ * clears OVERLAP_THRESHOLD against BOTH references and gets reported as being
+ * both lists at once — a confident contradiction. A candidate that cannot be
+ * separated is an ambiguous result, which is a finding, not a resolution.
+ */
+const OVERLAP_SEPARATION = 0.15;
+
 // ---------------------------------------------------------------------------
 // Step 1 — host reachability
 // ---------------------------------------------------------------------------
@@ -448,18 +459,63 @@ function computeOverlap(candidateIds: number[], reference: Set<number>): Overlap
   return { matched: candidateIds.filter((id) => reference.has(id)).length, total: candidateIds.length };
 }
 
-function concludeCandidate(been: Overlap, wantToTry: Overlap): string {
+/**
+ * Is a candidate's overlap with one list decisive — clearing the threshold AND
+ * beating the other list by a clear margin?
+ *
+ * `available` guards the case where the reference list could not be fetched at
+ * all. An unfetched reference yields an empty id set, which scores 0 overlap
+ * for every candidate — indistinguishable from "genuinely didn't match" unless
+ * we track it. Treating unknown as zero would let a Been field be misfiled as
+ * something else purely because get-ranking happened to fail.
+ */
+function isDecisive(primary: Overlap, other: Overlap, available: boolean): boolean {
+  if (!available || primary.total === 0) return false;
+  const p = primary.matched / primary.total;
+  if (p < OVERLAP_THRESHOLD) return false;
+  const o = other.total > 0 ? other.matched / other.total : 0;
+  return p >= o + OVERLAP_SEPARATION;
+}
+
+function concludeCandidate(
+  been: Overlap,
+  wantToTry: Overlap,
+  beenAvailable: boolean,
+  wttAvailable: boolean,
+): string {
   if (been.total === 0 && wantToTry.total === 0) {
     return "no ids returned — cannot classify against Been or Want-to-Try";
   }
   const beenFrac = been.total > 0 ? been.matched / been.total : 0;
   const wttFrac = wantToTry.total > 0 ? wantToTry.matched / wantToTry.total : 0;
-  if (beenFrac >= OVERLAP_THRESHOLD && beenFrac >= wttFrac) {
+
+  if (isDecisive(been, wantToTry, beenAvailable)) {
     return `${been.matched}/${been.total} returned ids appear in get-ranking -> BEEN list`;
   }
-  if (wttFrac >= OVERLAP_THRESHOLD && wttFrac > beenFrac) {
+  if (isDecisive(wantToTry, been, wttAvailable)) {
     return `${wantToTry.matched}/${wantToTry.total} returned ids appear in get-bookmark -> WANT_TO_TRY list`;
   }
+
+  // Cleared the bar against both references but separated by neither — say so
+  // rather than picking the larger of two indistinguishable numbers.
+  if (beenFrac >= OVERLAP_THRESHOLD && wttFrac >= OVERLAP_THRESHOLD) {
+    return (
+      `AMBIGUOUS — overlaps Been (${been.matched}/${been.total}) and ` +
+      `Want-to-Try (${wantToTry.matched}/${wantToTry.total}) too evenly to tell ` +
+      `them apart; not resolved`
+    );
+  }
+
+  const unavailable: string[] = [];
+  if (!beenAvailable) unavailable.push("Been (get-ranking failed)");
+  if (!wttAvailable) unavailable.push("Want-to-Try (get-bookmark failed)");
+  if (unavailable.length > 0) {
+    return (
+      `cannot classify — reference list unavailable: ${unavailable.join(", ")}. ` +
+      `Overlap against a list that was never fetched is meaningless, not zero.`
+    );
+  }
+
   return (
     `low/no overlap with Been (${been.matched}/${been.total}) or ` +
     `Want-to-Try (${wantToTry.matched}/${wantToTry.total}) — likely RECS, ` +
@@ -609,7 +665,12 @@ async function probeListField(
         sampleIds: ids.slice(0, 5),
         overlapBeen,
         overlapWantToTry,
-        conclusion: concludeCandidate(overlapBeen, overlapWantToTry),
+        conclusion: concludeCandidate(
+          overlapBeen,
+          overlapWantToTry,
+          beenIdCount !== null,
+          wantToTryIdCount !== null,
+        ),
       });
     } catch (err) {
       const { status, message } = errInfo(err);
@@ -628,15 +689,19 @@ async function probeListField(
     }
   }
 
-  const pickBest = (
-    key: "overlapBeen" | "overlapWantToTry",
-  ): string | null => {
+  // A pick must be DECISIVE — clear the overlap threshold and beat the other
+  // list by a clear margin — so a candidate returning a mix of both lists is
+  // reported as ambiguous rather than claimed as both.
+  const pickBest = (key: "overlapBeen" | "overlapWantToTry"): string | null => {
+    const otherKey = key === "overlapBeen" ? "overlapWantToTry" : "overlapBeen";
+    const available = key === "overlapBeen" ? beenIdCount !== null : wantToTryIdCount !== null;
     let best: { candidate: string; frac: number; matched: number } | null = null;
     for (const r of results) {
       const overlap = r[key];
-      if (!overlap || overlap.total === 0) continue;
+      const other = r[otherKey];
+      if (!overlap || !other) continue;
+      if (!isDecisive(overlap, other, available)) continue;
       const frac = overlap.matched / overlap.total;
-      if (frac < OVERLAP_THRESHOLD) continue;
       if (!best || frac > best.frac || (frac === best.frac && overlap.matched > best.matched)) {
         best = { candidate: r.candidate, frac, matched: overlap.matched };
       }
@@ -645,7 +710,15 @@ async function probeListField(
   };
 
   const bestBeenCandidate = pickBest("overlapBeen");
-  const bestWantToTryCandidate = pickBest("overlapWantToTry");
+  let bestWantToTryCandidate = pickBest("overlapWantToTry");
+
+  // Belt and braces: isDecisive should already make this impossible, but a
+  // single field reported as being two different lists is the one outcome that
+  // must never reach a report, so refuse it explicitly rather than trust the
+  // arithmetic above.
+  if (bestBeenCandidate !== null && bestBeenCandidate === bestWantToTryCandidate) {
+    bestWantToTryCandidate = null;
+  }
   const unresolvedCandidates = results
     .filter((r) => r.ok && r.candidate !== bestBeenCandidate && r.candidate !== bestWantToTryCandidate)
     .map((r) => r.candidate);

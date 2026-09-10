@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { endpoints } from "@beli/contract";
+import { BookmarkListResponse, endpoints } from "@beli/contract";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const loadFixture = (name: string) =>
@@ -45,5 +45,36 @@ describe("lists & guides endpoints", () => {
     const res = loadFixture("published-list-cities-response.json");
     const parsed = endpoints.publishedListCities.response.parse(res);
     expect(parsed.results).toEqual(["New York", "Los Angeles", "London"]);
+  });
+});
+
+describe("BookmarkListResponse tolerance", () => {
+  const uuid = "11111111-2222-3333-4444-555555555555";
+  const row = { id: 1, user: uuid, business: { id: 10, name: "A" } };
+
+  it("parses the plain bucketed shape", () => {
+    const got = BookmarkListResponse.parse({ Restaurants: [row] });
+    expect(got.Restaurants).toHaveLength(1);
+  });
+
+  it("survives an added scalar metadata key instead of rejecting everything", () => {
+    // A single new sibling key used to take out the whole Want-to-Try list.
+    const got = BookmarkListResponse.parse({ Restaurants: [row], count: 1, next: null });
+    expect(Object.keys(got)).toEqual(["Restaurants"]);
+    expect(got.Restaurants).toHaveLength(1);
+  });
+
+  it("keeps multiple buckets", () => {
+    const got = BookmarkListResponse.parse({ Restaurants: [row], Bars: [row] });
+    expect(Object.keys(got).sort()).toEqual(["Bars", "Restaurants"]);
+  });
+
+  it("still fails loudly when a bucket's ROW shape actually changes", () => {
+    // Tolerating a new key must not become tolerating silent data loss.
+    expect(() => BookmarkListResponse.parse({ Restaurants: [{ nope: true }] })).toThrow();
+  });
+
+  it("returns an empty object for a response with no buckets", () => {
+    expect(BookmarkListResponse.parse({ count: 0 })).toEqual({});
   });
 });
