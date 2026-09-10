@@ -1,0 +1,15 @@
+{
+  "filters": [
+    { "key": "CITY", "value": ["Current Location"] },
+    { "key": "GOODFOR", "value": ["GOODFORBEER"] }
+  ],
+  "list_field": "TRENDING",
+  "user": "bd6fbeef-31f0-4836-9199-69836572e74c",
+  "user2": "bd6fbeef-31f0-4836-9199-69836572e74c",
+  "category": "RES",
+  "bounds": null,
+  "sort_method": "Most Trending",
+  "coords": "40.7128,-74.0060",
+  "ids": [7316, 84],
+  "load_businesses": false
+}

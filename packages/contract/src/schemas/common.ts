@@ -15,16 +15,26 @@ export const IntId = z.number().int();
 export const PlaceId = z.string().min(1);
 
 /**
- * List/category code (UPPERCASE enum used by add-ranking, bookmarks, lists).
- * `RES` (restaurants) is the default. The set below covers the categories
- * observed in the app; the API may accept additional codes.
+ * List/category code (UPPERCASE enum used by add-ranking, bookmarks, lists,
+ * and the discovery/filter endpoints). `RES` (restaurants) is the default.
+ *
+ * This is the UNION of every code observed across both reference projects:
+ * the 3-letter short codes from beli-api-reference.md §4 (`RES`, `BAR`,
+ * `BAK`, `DES`) plus the longer codes belimaps' OpenAPI capture uses
+ * (`BAKERY`, `DESSERT`, `COFFEE`, `OTHER`). It is NOT confirmed whether the
+ * live API accepts the short and long forms interchangeably (e.g. `BAK` vs.
+ * `BAKERY`) for every category, or whether one form is stale — the exact
+ * live set is resolved later by the discovery node (T5). Treat this enum as
+ * intentionally over-inclusive until then.
  */
 export const Category = z.enum([
   "RES",
   "BAR",
-  "COFFEE",
+  "BAK",
   "BAKERY",
+  "DES",
   "DESSERT",
+  "COFFEE",
   "OTHER",
 ]);
 export type Category = z.infer<typeof Category>;

@@ -1,0 +1,6 @@
+{
+  "results": [
+    { "city": "New York", "state": "NY", "country": "US" },
+    { "city": "Los Angeles", "state": "CA", "country": "US" }
+  ]
+}

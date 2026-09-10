@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "id": 9001,
+      "title": "Best Ramen in NYC",
+      "description": "A ranked guide to the city's best bowls.",
+      "cover_photo": { "url": "https://photos2.beliapp.cloud/example.jpg" },
+      "ranked": true,
+      "category": "RES",
+      "quick_link": "https://beliapp.com/l/best-ramen-nyc",
+      "challenge_info": null,
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 9002,
+      "title": "Dessert Crawl Challenge",
+      "description": null,
+      "ranked": false,
+      "category": "DES",
+      "challenge_info": {
+        "is_joined": true,
+        "progress": 3,
+        "total": 10,
+        "participant_count": 128
+      },
+      "status": "PUBLISHED"
+    }
+  ]
+}

@@ -4,3 +4,8 @@ export * from "./business.js";
 export * from "./ranking.js";
 export * from "./photo.js";
 export * from "./bookmark.js";
+export * from "./discovery.js";
+export * from "./recs.js";
+export * from "./lists.js";
+export * from "./social.js";
+export * from "./ranking-actions.js";

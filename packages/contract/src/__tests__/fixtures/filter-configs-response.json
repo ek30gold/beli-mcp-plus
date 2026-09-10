@@ -1,0 +1,5 @@
+{
+  "CITY": ["New York", "Los Angeles"],
+  "GOODFOR": ["GOODFORBEER", "GOODFORWINE"],
+  "PRICE": [1, 2, 3, 4]
+}
