@@ -183,3 +183,25 @@ when a score bound is set — so any score bound empties a Want-to-Try list, whi
 has no scores at all. Keeping such rows would report an unscored place as
 clearing a score floor it was never measured against.
 
+### Completing this document is now one command
+
+`beli-mcp-plus probe --emit-discovered` generates
+`packages/contract/src/discovered.ts` directly from a live run, so the overlap
+evidence is never hand-transcribed into a confidence marker. Values the probe
+cannot establish are emitted as `null`/UNRESOLVED.
+
+Testing the discovery logic against a simulated API with known ground truth
+found one defect worth recording, because it would have produced a confidently
+wrong answer rather than a visible failure: a candidate returning a 50/50 mix of
+Been and Want-to-Try ids cleared the 0.5 overlap threshold against both
+references and was reported as being both lists at once. Resolution now requires
+a decisive margin, and an inseparable candidate is reported AMBIGUOUS.
+
+The same exercise showed a failed reference fetch was indistinguishable from an
+empty list — both score zero overlap — so a `get-ranking` outage could have
+misfiled the Been field. The report now says the reference was unavailable
+instead of quoting a meaningless zero.
+
+An `empty` recs response is likewise no longer reported as a confirmed shape: it
+proves the call worked, not whether recs is a curated list or a score map.
+

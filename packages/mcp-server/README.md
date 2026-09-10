@@ -169,6 +169,19 @@ facet configs, and the recs endpoints' response shape — and prints a report
 (also written to `probe-report.json`). Never mutates your account. The same
 checks are available as the `beli_doctor` MCP tool. See also `beli-mcp --help`.
 
+### Completing API discovery
+
+`probe --emit-discovered` regenerates `packages/contract/src/discovered.ts`
+from a live run: `list_field` values for each personal list, the category
+values the API actually accepted, observed facet keys, and the recs response
+shape. Each value carries CONFIRMED (with the evidence quoted) or UNRESOLVED.
+
+Resolution is by **id-overlap** against `get-ranking` and `get-bookmark`, never
+by how plausible a name looks — a field called `BEEN` that returns the bookmark
+list is reported as Want-to-Try. A candidate that overlaps both lists too evenly
+to separate is reported AMBIGUOUS and left unresolved, and anything the probe
+could not establish is emitted as `null`, never as a guess.
+
 ## Write safety
 
 Write tools mutate your real account. By default they are **gated**: either start

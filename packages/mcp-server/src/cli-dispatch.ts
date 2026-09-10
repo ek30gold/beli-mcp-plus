@@ -3,6 +3,7 @@ import { BeliClient, emptySession } from "@beli/client";
 import { FileSessionStore } from "./auth.js";
 import type { Config } from "./config.js";
 import { runInteractiveLogin } from "./login/server.js";
+import { renderDiscovered } from "./discovered-gen.js";
 import { formatHumanReport, runProbe } from "./probe.js";
 
 export const HELP_TEXT = `beli-mcp-plus — MCP server + CLI for Beli (beliapp.com)
@@ -20,6 +21,11 @@ Usage:
                                  endpoints' response shape). Also writes a machine-readable
                                  probe-report.json (see BELI_PROBE_OUTPUT below). Read-only —
                                  never mutates your account.
+  beli-mcp-plus probe --emit-discovered[=PATH]
+                                As above, and also generate the typed constants file
+                                 (packages/contract/src/discovered.ts by default) from the
+                                 live findings. Values the probe could not establish are
+                                 emitted as null/UNRESOLVED, never as a guess.
   beli-mcp-plus --help, -h      Show this help and exit.
 
 Running with no arguments starts the MCP server on stdio.
@@ -30,6 +36,7 @@ Environment:
   BELI_NO_BROWSER=1                         disable interactive browser login
   BELI_ALLOW_WRITES=1                       allow write tools without per-call confirm:true
   BELI_PROBE_OUTPUT                         where \`probe\` writes probe-report.json
+  BELI_DISCOVERED_OUTPUT                    where \`--emit-discovered\` writes discovered.ts
 `;
 
 /** What the caller (cli.ts) should do after `runCli` returns. */
@@ -122,6 +129,29 @@ export async function runCli(argv: string[], config: Config): Promise<CliOutcome
         `warning: failed to write ${config.probeOutputPath}: ` +
           `${err instanceof Error ? err.message : String(err)}\n`,
       );
+    }
+
+    // Optional codegen: turn the live findings into the typed contract file,
+    // so nobody hand-transcribes overlap evidence into a confidence marker.
+    const emitFlag = argv.find((a) => a === "--emit-discovered" || a.startsWith("--emit-discovered="));
+    if (emitFlag) {
+      const explicit = emitFlag.includes("=") ? emitFlag.split("=").slice(1).join("=") : "";
+      const target = explicit || config.discoveredOutputPath;
+      try {
+        await writeFile(target, renderDiscovered(report), "utf8");
+        process.stderr.write(`discovered constants written to ${target}\n`);
+        if (!report.session.authenticated) {
+          process.stderr.write(
+            "warning: the probe was NOT authenticated, so every value in that file " +
+              "is UNRESOLVED. Fix access and re-run before relying on it.\n",
+          );
+        }
+      } catch (err) {
+        process.stderr.write(
+          `warning: failed to write ${target}: ` +
+            `${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      }
     }
     return "handled";
   }

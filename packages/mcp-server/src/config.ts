@@ -20,6 +20,8 @@ export interface Config {
   noBrowser: boolean;
   /** Where `probe` writes its machine-readable report (default: ./probe-report.json). */
   probeOutputPath: string;
+  /** Where `probe --emit-discovered` writes the generated contract file. */
+  discoveredOutputPath: string;
 }
 
 interface RawCreds {
@@ -108,5 +110,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     minIntervalMs: Number(env.BELI_MIN_INTERVAL_MS ?? "350"),
     noBrowser: env.BELI_NO_BROWSER === "1" || env.BELI_NO_BROWSER === "true",
     probeOutputPath: env.BELI_PROBE_OUTPUT ?? join(process.cwd(), "probe-report.json"),
+    discoveredOutputPath:
+      env.BELI_DISCOVERED_OUTPUT ??
+      join(process.cwd(), "packages", "contract", "src", "discovered.ts"),
   };
 }
