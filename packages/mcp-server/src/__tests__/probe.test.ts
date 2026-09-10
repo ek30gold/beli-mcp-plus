@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BeliClient, MemorySessionStore } from "@beli/client";
 import { loadConfig } from "../config.js";
-import { extractListFieldHints, formatHumanReport, redact, runProbe } from "../probe.js";
+import {
+  detectEgressBlock,
+  extractListFieldHints,
+  formatHumanReport,
+  redact,
+  runProbe,
+} from "../probe.js";
 
 const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const fakeAccessToken = (userId: string) =>
@@ -184,5 +190,30 @@ describe("runProbe", () => {
     expect(human).not.toContain(fullToken);
     expect(asJson).not.toContain(fullToken);
     expect(human).toContain(report.session.accessTokenPreview);
+  });
+});
+
+describe("detectEgressBlock", () => {
+  const res = (status: number, body: string): Response =>
+    new Response(body, { status });
+
+  it("flags a proxy allowlist refusal as an egress block", async () => {
+    const got = await detectEgressBlock(
+      res(403, "Host not in allowlist: backoffice-service-t57o3dxfca-nn.a.run.app. Add this host..."),
+    );
+    expect(got).toContain("not in allowlist");
+  });
+
+  it("flags a 407 proxy-auth refusal", async () => {
+    expect(await detectEgressBlock(res(407, "Proxy Authentication Required"))).not.toBeNull();
+  });
+
+  it("does NOT misclassify Beli's own 403 for a missing User-Agent", async () => {
+    expect(await detectEgressBlock(res(403, '{"detail":"Forbidden."}'))).toBeNull();
+  });
+
+  it("ignores non-403/407 statuses entirely", async () => {
+    expect(await detectEgressBlock(res(200, "not in allowlist"))).toBeNull();
+    expect(await detectEgressBlock(res(404, "not in allowlist"))).toBeNull();
   });
 });

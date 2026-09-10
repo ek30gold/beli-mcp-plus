@@ -59,6 +59,14 @@ export interface HostReachability {
   status: number | null;
   ms: number;
   error?: string;
+  /**
+   * True when the response came from an egress proxy refusing the host rather
+   * than from Beli. Sandboxed environments (Claude Code cloud sessions, CI
+   * runners behind a default-deny proxy) answer non-allowlisted hosts with
+   * their own 403, which would otherwise read as a successful round-trip and
+   * hide a misconfigured allowlist behind a cascade of confusing auth errors.
+   */
+  blockedByEgress?: boolean;
 }
 
 export interface SessionProbe {
@@ -183,6 +191,24 @@ const OVERLAP_THRESHOLD = 0.5;
 // Step 1 — host reachability
 // ---------------------------------------------------------------------------
 
+/**
+ * Recognise a proxy-origin refusal. Kept deliberately narrow: it must not
+ * misclassify a genuine 403 from Beli (which the API returns for a missing
+ * User-Agent/Origin) as an egress block.
+ */
+export async function detectEgressBlock(res: Response): Promise<string | null> {
+  if (res.status !== 403 && res.status !== 407) return null;
+  let body = "";
+  try {
+    body = (await res.clone().text()).slice(0, 500);
+  } catch {
+    return null;
+  }
+  const m = body.match(/not in allowlist|allowlist|egress|proxy|forbidden by policy/i);
+  if (!m) return null;
+  return body.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
 async function probeHost(host: HostKey, timeoutMs = 5000): Promise<HostReachability> {
   const url = HOSTS[host];
   const start = Date.now();
@@ -197,8 +223,22 @@ async function probeHost(host: HostKey, timeoutMs = 5000): Promise<HostReachabil
         Referer: META.requiredHeaders.Referer,
       },
     });
-    // Reachability only cares that a server answered — any HTTP status
-    // (even 403/404) proves the host is up and routable from here.
+    // A server answered — but check it was Beli and not an egress proxy
+    // refusing the host, which is a block, not reachability.
+    const block = await detectEgressBlock(res);
+    if (block) {
+      return {
+        host,
+        url,
+        reachable: false,
+        status: res.status,
+        ms: Date.now() - start,
+        blockedByEgress: true,
+        error: `blocked by network egress policy (${block})`,
+      };
+    }
+    // Otherwise any HTTP status (even 403/404 from Beli itself) proves the
+    // host is up and routable from here.
     return { host, url, reachable: true, status: res.status, ms: Date.now() - start };
   } catch (err) {
     return {
@@ -774,7 +814,14 @@ export function formatHumanReport(report: ProbeReport): string {
   lines.push("=".repeat(60));
   lines.push("BELI DOCTOR — FINDINGS SUMMARY");
   lines.push("=".repeat(60));
-  lines.push(`  hosts reachable:  ${reachableCount}/${report.hosts.length}`);
+  const blockedCount = report.hosts.filter((h) => h.blockedByEgress).length;
+  lines.push(
+    blockedCount > 0
+      ? `  hosts reachable:  ${reachableCount}/${report.hosts.length}  ` +
+          `(${blockedCount} BLOCKED by network egress policy — add them to this ` +
+          `environment's allowed domains)`
+      : `  hosts reachable:  ${reachableCount}/${report.hosts.length}`,
+  );
   lines.push(
     `  auth:             ${report.session.authenticated ? `authenticated as ${report.session.userId}` : "NOT authenticated"}`,
   );
@@ -810,7 +857,13 @@ export function formatHumanReport(report: ProbeReport): string {
   lines.push("-".repeat(60));
   for (const h of report.hosts) {
     lines.push(
-      `  ${h.host.padEnd(9)} ${h.reachable ? `reachable (status ${h.status}, ${h.ms}ms)` : `UNREACHABLE — ${h.error}`}  ${h.url}`,
+      `  ${h.host.padEnd(9)} ${
+        h.reachable
+          ? `reachable (status ${h.status}, ${h.ms}ms)`
+          : h.blockedByEgress
+            ? `BLOCKED BY EGRESS POLICY — ${h.error}`
+            : `UNREACHABLE — ${h.error}`
+      }  ${h.url}`,
     );
   }
   lines.push("");
