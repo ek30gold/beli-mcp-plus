@@ -61,9 +61,13 @@ async function main(): Promise<void> {
       process.stderr.write("(not logged in)\n");
       return;
     }
+    if (client.userId) {
+      process.stderr.write(`${client.userId}\n`);
+      return;
+    }
     try {
-      // Only the refresh token is persisted, so the user id must be re-derived
-      // via a live refresh call rather than read straight off disk.
+      // No cached user id (session predates userId caching, or was cleared), so
+      // re-derive it with a live refresh call.
       await client.ensureAuth();
       process.stderr.write(`${client.userId ?? "(unknown user id)"}\n`);
     } catch (err) {

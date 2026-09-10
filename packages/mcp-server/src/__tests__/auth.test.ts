@@ -7,7 +7,7 @@ import { FileSessionStore } from "../auth.js";
 
 const SECRET_PASSWORD = "sup3r-s3cret-hunter2!";
 
-describe("FileSessionStore — persists ONLY the refresh token", () => {
+describe("FileSessionStore — persists only the refresh token and user id", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -18,14 +18,14 @@ describe("FileSessionStore — persists ONLY the refresh token", () => {
     vi.unstubAllGlobals();
   });
 
-  it("writes only {refresh} to disk — no access/userId/accessExp, no password field, mode 0600", async () => {
+  it("writes only {refresh,userId} to disk — no access/accessExp, no password field, mode 0600", async () => {
     const sessionPath = join(dir, "session.json");
     const store = new FileSessionStore(sessionPath);
 
     const state: SessionState = {
       access: "ACCESS_TOKEN_SHOULD_NOT_BE_PERSISTED",
       refresh: "REFRESH_TOKEN_SHOULD_BE_PERSISTED",
-      userId: "user-should-not-be-persisted",
+      userId: "user-id-is-persisted-and-is-not-a-secret",
       accessExp: 9999999999,
     };
     await store.save(state);
@@ -33,10 +33,10 @@ describe("FileSessionStore — persists ONLY the refresh token", () => {
     const raw = await readFile(sessionPath, "utf8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
 
-    expect(Object.keys(parsed)).toEqual(["refresh"]);
+    expect(Object.keys(parsed).sort()).toEqual(["refresh", "userId"]);
     expect(parsed.refresh).toBe("REFRESH_TOKEN_SHOULD_BE_PERSISTED");
+    expect(parsed.userId).toBe("user-id-is-persisted-and-is-not-a-secret");
     expect(parsed).not.toHaveProperty("access");
-    expect(parsed).not.toHaveProperty("userId");
     expect(parsed).not.toHaveProperty("accessExp");
     expect(parsed).not.toHaveProperty("password");
     expect(raw).not.toContain("ACCESS_TOKEN_SHOULD_NOT_BE_PERSISTED");
@@ -46,7 +46,7 @@ describe("FileSessionStore — persists ONLY the refresh token", () => {
     expect(st.mode & 0o777).toBe(0o600);
   });
 
-  it("round-trips: load() after save() restores only the refresh token", async () => {
+  it("round-trips: load() after save() restores the refresh token and user id", async () => {
     const sessionPath = join(dir, "session.json");
     const store = new FileSessionStore(sessionPath);
     await store.save({
@@ -56,7 +56,7 @@ describe("FileSessionStore — persists ONLY the refresh token", () => {
       accessExp: 123,
     });
     const loaded = await store.load();
-    expect(loaded).toEqual({ access: null, refresh: "r", userId: null, accessExp: null });
+    expect(loaded).toEqual({ access: null, refresh: "r", userId: "u", accessExp: null });
   });
 
   it("end-to-end: a real login's persisted session.json never contains the password, in any form", async () => {
@@ -81,7 +81,7 @@ describe("FileSessionStore — persists ONLY the refresh token", () => {
     expect(raw).not.toContain(SECRET_PASSWORD);
     expect(raw.toLowerCase()).not.toContain("password");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(["refresh"]);
+    expect(Object.keys(parsed).sort()).toEqual(["refresh", "userId"]);
     expect(parsed.refresh).toBe("r1");
   });
 

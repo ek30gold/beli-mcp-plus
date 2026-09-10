@@ -27,6 +27,12 @@ export interface SessionStore {
  */
 export interface PersistedSession {
   refresh: string | null;
+  /**
+   * The account UUID. Not a secret — it appears in the path of most Beli API
+   * routes — and caching it avoids a mandatory refresh round-trip before the
+   * first list query on every cold start.
+   */
+  userId: string | null;
 }
 
 export const emptySession = (): SessionState => ({

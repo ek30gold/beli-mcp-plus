@@ -9,12 +9,12 @@ import {
 } from "@beli/client";
 
 /**
- * Persists ONLY the Beli refresh token to a 0600 JSON file so one login lasts
- * ~7 days (until the refresh token expires) across server restarts. The
- * access token, user id and access-token expiry are intentionally NOT written
- * to disk (see `PersistedSession`) — they're cheap to re-derive from one
- * refresh call — and the password is never written to disk at all (it never
- * enters `SessionState` in the first place).
+ * Persists the Beli refresh token and the account UUID to a 0600 JSON file so
+ * one login lasts ~7 days (until the refresh token expires) across server
+ * restarts. The short-lived access token and its expiry are intentionally NOT
+ * written to disk — they're cheap to re-derive from one refresh call. The
+ * password is never written to disk at all (it never enters `SessionState` in
+ * the first place).
  *
  * Writes are atomic (temp file + rename) so concurrent writers and a separate
  * `beli-mcp login` process can't observe or produce a half-written file, and so
@@ -27,14 +27,21 @@ export class FileSessionStore implements SessionStore {
     try {
       const raw = await readFile(this.path, "utf8");
       const persisted = JSON.parse(raw) as Partial<PersistedSession>;
-      return { ...emptySession(), refresh: persisted.refresh ?? null };
+      return {
+        ...emptySession(),
+        refresh: persisted.refresh ?? null,
+        userId: persisted.userId ?? null,
+      };
     } catch {
       return emptySession();
     }
   }
 
   async save(state: SessionState): Promise<void> {
-    const persisted: PersistedSession = { refresh: state.refresh };
+    const persisted: PersistedSession = {
+      refresh: state.refresh,
+      userId: state.userId,
+    };
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
     const tmp = `${this.path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
     await writeFile(tmp, JSON.stringify(persisted, null, 2), { mode: 0o600 });
