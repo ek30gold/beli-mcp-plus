@@ -1,0 +1,36 @@
+name: Publish
+
+# Publishes beli-mcp to npm when you create a GitHub Release.
+#
+# Tokenless: uses npm Trusted Publishing (OIDC) — NO npm token / secret required.
+# One-time setup on npmjs.com after the package exists (first publish is done
+# locally): npmjs.com -> beli-mcp -> Settings -> Trusted Publisher -> add
+#   Provider:   GitHub Actions
+#   Repository: jcjc-dev/beli-mcp
+#   Workflow:   publish.yml
+# Provenance is attached automatically when publishing via OIDC.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # OIDC for npm Trusted Publishing + provenance
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # npm >= 11.5 is required for tokenless Trusted Publishing.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - name: Publish beli-mcp to npm (Trusted Publishing, no token)
+        run: npm publish --workspace beli-mcp --access public
