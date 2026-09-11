@@ -1,5 +1,6 @@
 import {
   endpoints,
+  LIST_FIELD,
   LoginRequest,
   SENTIMENT_VALUE,
   type Category,
@@ -13,6 +14,7 @@ import {
   filterListEntries,
   normalizeBeen,
   normalizeWantToTry,
+  type ListBackend,
   type ListEntry,
   type ListFilter,
   type ListName,
@@ -24,6 +26,29 @@ import {
   type SessionState,
   type SessionStore,
 } from "./session.js";
+
+/**
+ * `list_field` values POST /api/filter-list/ accepts for each personal list,
+ * as confirmed live (see `LIST_FIELD` in `@beli/contract`'s discovered.ts).
+ * Read through a lookup keyed by {@link ListName} — rather than reaching for
+ * `LIST_FIELD.BEEN`/`.WANT_TO_TRY` inline at each call site — so a future
+ * regeneration of discovered.ts that resolves one back to `null` degrades to
+ * one clean thrown error in `searchListServer` instead of a type error or,
+ * worse, a silent fallthrough to a guessed string.
+ */
+const SERVER_LIST_FIELD: Record<ListName, string | null> = {
+  been: LIST_FIELD.BEEN,
+  want_to_try: LIST_FIELD.WANT_TO_TRY,
+};
+
+/**
+ * The only `sort_method` value POST /api/filter-list/ was ever sent with live
+ * (see probe-report.json's `listField.requestTemplate`). Its semantics (a
+ * "Most Trending" ordering) are unrelated to {@link ListFilter}'s own `sort`,
+ * which `searchListServer` always re-applies locally afterward — so the
+ * server-side order this produces is never actually relied on.
+ */
+const FILTER_LIST_SORT_METHOD = "Most Trending";
 
 export interface BeliClientOptions {
   /** Exactly one of `email`/`phone` should be supplied alongside `password`. */
@@ -380,12 +405,16 @@ export class BeliClient {
   /**
    * Search and filter one of the personal lists.
    *
-   * Fetches the category's list through the endpoints already known to work and
-   * filters in process — see the header of lists.ts for why this is client-side
-   * and what would change if `filter-list`'s `list_field` were ever established.
+   * `backend` (default `"client"`) selects the implementation — see
+   * {@link ListBackend} and the header of lists.ts. Both backends filter
+   * through the exact same {@link filterListEntries}, so they cannot diverge
+   * on filtering/sorting/paging behavior; they only differ in how the
+   * underlying rows are obtained.
    *
-   * Costs one upstream request per call regardless of how narrow the filter is,
-   * so callers that filter the same list repeatedly should fetch once and use
+   * The `"client"` path fetches the category's list through the endpoints
+   * already known to work and filters in process. It costs one upstream
+   * request per call regardless of how narrow the filter is, so callers that
+   * filter the same list repeatedly should fetch once and use
    * `filterListEntries` directly.
    */
   async searchList(
@@ -393,12 +422,92 @@ export class BeliClient {
     category: Category = "RES",
     filter: ListFilter = {},
     user?: string,
+    backend: ListBackend = "client",
   ): Promise<ListEntry[]> {
+    if (backend === "server") {
+      return this.searchListServer(list, category, filter, user);
+    }
     const entries =
       list === "been"
         ? normalizeBeen(await this.getBeen(category, user))
         : normalizeWantToTry(await this.getWantToTry(category, user));
     return filterListEntries(entries, filter);
+  }
+
+  /**
+   * Server-assisted variant of {@link searchList}: calls
+   * `POST /api/filter-list/` with the confirmed `list_field` for `list` (see
+   * `LIST_FIELD` in `@beli/contract`'s discovered.ts) to obtain the
+   * authoritative set of business ids on that list, then narrows the same
+   * get-ranking/get-bookmark rows the client-side path uses down to that set
+   * before applying the identical local `filterListEntries`.
+   *
+   * Why this still calls get-ranking/get-bookmark too: `filter-list`'s
+   * response (`FilterListResponse` in `@beli/contract`) only confirms a bare
+   * array of business ids (`results`) — no score, no bucket, no hydrated
+   * business fields to filter or sort on. `filters` clause encoding for any
+   * facet (see `FACET_KEYS` in discovered.ts) is likewise unconfirmed, so
+   * none is sent here (`filters: []`) — this pushes list MEMBERSHIP
+   * server-side, not the query filter itself, which still runs locally.
+   *
+   * Throws if `list` has no confirmed `list_field` (present-day: never, for
+   * `"been"`/`"want_to_try"` — `FILTER_LIST_SERVES_PERSONAL_LISTS` gates that
+   * — but `LIST_FIELD.RECS` is a live example of an unresolved value, and a
+   * future discovery re-run could in principle regenerate either of these
+   * back to `null` too) rather than guessing a value or silently falling back
+   * to the client-side path.
+   */
+  private async searchListServer(
+    list: ListName,
+    category: Category,
+    filter: ListFilter,
+    user?: string,
+  ): Promise<ListEntry[]> {
+    const listField = SERVER_LIST_FIELD[list];
+    if (!listField) {
+      throw new Error(
+        `filter-list has no confirmed list_field for "${list}" — use the ` +
+          `client-side backend (BeliClient.searchList's default, or ` +
+          `BELI_LIST_BACKEND=client) instead.`,
+      );
+    }
+    await this.ensureAuth();
+    const uid = user ?? this.requireUserId();
+    const [filterListRes, entries] = await Promise.all([
+      this.request("filterList", {
+        body: {
+          filters: [],
+          list_field: listField,
+          user: uid,
+          user2: uid,
+          category,
+          bounds: null,
+          sort_method: FILTER_LIST_SORT_METHOD,
+          load_businesses: false,
+        },
+      }),
+      list === "been"
+        ? this.getBeen(category, user).then(normalizeBeen)
+        : this.getWantToTry(category, user).then(normalizeWantToTry),
+    ]);
+    const allowedIds = new Set(filterListRes.results);
+    const scoped = entries.filter((e) => allowedIds.has(e.business.id));
+    return filterListEntries(scoped, filter);
+  }
+
+  // ---- recs ----
+  /**
+   * Fetch a user's recommendations (GET {RECS}/api/recs/{uuid}/). Only the
+   * envelope is confirmed live — a top-level array of items, per
+   * `RECS_SHAPE.recs` in `@beli/contract`'s `discovered.ts` — so item
+   * fields are returned exactly as the API sent them (see `RecItem` in
+   * `@beli/contract`'s recs schema for why they're left untyped).
+   */
+  async getRecs(user?: string) {
+    await this.ensureAuth();
+    return this.request("recs", {
+      params: { userId: user ?? this.requireUserId() },
+    });
   }
 
   // ---- reviews ----

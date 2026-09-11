@@ -1,9 +1,15 @@
 # Beli API discovery (T5)
 
-**Status: BLOCKED — no live API access obtained. No discovery questions were answered.**
+**Status: a live run on 2026-09-11 obtained API access and resolved most T5 questions.
+See "What was determined (2026-09-11 live run)" below for current findings; one
+question (the Recs `list_field` value) remains unresolved. Everything above that
+section is the original 2026-09-10 run, kept as history — it describes a genuinely
+different account state (the egress block that run hit), not a contradiction.**
 
-Date of run: 2026-09-10
-Account: `ek30gold@gmail.com` (credentials present in env; never used successfully)
+Date of original run: 2026-09-10 (blocked; see below)
+Date of live run: 2026-09-11 (see "What was determined" below)
+Account: `ek30gold@gmail.com` (credentials present in env; used successfully as of the
+2026-09-11 run)
 App version reported by probe: 9.3.1
 
 This document records a discovery run that **failed at the prerequisite stage**. It is
@@ -109,31 +115,88 @@ agent (or set the env flag).
 The repository is ready. Re-running T5 unchanged after the allowlist is fixed is the
 whole of the remaining work.
 
-## What was NOT determined
+## What was determined (2026-09-11 live run)
 
-Every substantive T5 question is open. None of these was tested even once, because no
-request ever reached Beli.
+The egress block described above was resolved before this run (a prerequisite fix,
+`business.status` made nullable in the contract schema, unblocked JSON parsing of
+`GET /api/get-ranking/` and `GET /api/get-bookmark/`, which had been failing and making
+`list_field` look unresolvable). This run reached all four Beli hosts, authenticated
+(user `902c99ec-31bb-4c2b-bb65-2bd8c6848b91`, app v9.3.1), and ran
+`beli-mcp-plus probe --emit-discovered`, which wrote `packages/contract/src/discovered.ts`
+and `probe-report.json` directly from the live findings below. Every CONFIRMED value in
+`discovered.ts` was cross-checked against the quoted evidence in `probe-report.json`
+before being accepted here — the evidence standard is ID-overlap against the reference
+lists, never the plausibility of a candidate's name. (In this API the candidates
+literally named `BEEN` and `WANT_TO_TRY` both return **zero rows** — the real field
+values are `RANK` and `BOOKMARKED`, discovered only by overlap testing, not by name.)
 
-| Question                                                        | Status      |
-|-----------------------------------------------------------------|-------------|
-| Can `POST /api/filter-list/` serve the personal lists at all?    | **UNKNOWN** |
-| `list_field` value selecting **Been**                            | **UNKNOWN** |
-| `list_field` value selecting **Want to Try**                     | **UNKNOWN** |
-| `list_field` value selecting **Recs**                            | **UNKNOWN** |
-| Live category enum (RES / BAR / BAK / DES / COFFEE / OTHER / …)   | **UNKNOWN** |
-| Real facet keys and legal values                                  | **UNKNOWN** |
-| Recs response shape: curated list vs. score map                   | **UNKNOWN** |
+**(a) Can `POST /api/filter-list/` serve the personal lists at all?** **YES —
+CONFIRMED.** Both Been and Want to Try resolved with full-count overlap (see below).
+`FILTER_LIST_SERVES_PERSONAL_LISTS = true` in `discovered.ts`.
 
-Zero `list_field` candidates were exercised. No ID-overlap measurement against
-`GET /api/get-ranking/` or `GET /api/get-bookmark/` was performed, so there are no
-overlap fractions to report — not low ones, not zero ones, none.
+**(b) `list_field` values, with overlap fractions:**
 
-`packages/contract/src/discovered.ts` was deliberately **not written**. Every constant in
-it would have been an unverified guess, and the file's contract is that each value
-carries CONFIRMED or ASSUMED backed by stated evidence. A file of nothing but ASSUMED
-guesses would be worse than no file, because downstream nodes would build on it.
+| List        | Resolved `list_field` | Overlap                                                        |
+|-------------|------------------------|------------------------------------------------------------------|
+| Been        | `RANK`                 | 388/388 (100%) returned ids appear in `GET /api/get-ranking/`    |
+| Want to Try | `BOOKMARKED`           | 568/568 (100%) returned ids appear in `GET /api/get-bookmark/`   |
+| Recs        | **UNRESOLVED**         | no candidate produced usable evidence (see below)                |
+
+Every other candidate tried for the personal lists — `BEEN`, `RANKED`, `WANT_TO_TRY`,
+`WANTTOTRY`, `BOOKMARK` — returned 200 with **zero rows**, giving no ids to test overlap
+against and so no basis to confirm or rule them out either way.
+
+For Recs specifically: `RECS`, `REC`, and `FRIEND_RECS` all returned 200 with zero rows
+(same as above — no evidence either way); `TRENDING` failed with 503 (Service
+Unavailable) and `RECOMMENDED` failed with 504 (upstream timeout) — both look like
+transient upstream failures rather than rejected values, so they are worth re-probing
+rather than treated as ruled out. No candidate is being reported as the Recs
+`list_field` value. `discovered.ts` emits `LIST_FIELD.RECS = null` accordingly.
+
+**(c) Live category enum.** All eight candidates the probe tried against
+`GET /api/get-ranking/` returned 200 (none was rejected with 400/422):
+`RES, BAR, BAK, BAKERY, DES, DESSERT, COFFEE, OTHER`. Note the nuance: "accepted" here
+means only that the request did not error — `BAKERY`, `DESSERT`, `COFFEE`, and `OTHER`
+each returned 0 results for this account, so the probe cannot distinguish "a real,
+distinct enum value this account simply has nothing filed under" from "a value the
+endpoint silently ignores." Only `RES` (388), `BAR` (97), `DES` (19), and `BAK` (13) are
+backed by actual returned rows. `discovered.ts` encodes this split directly: `CATEGORIES`
+lists all eight accepted values, while `CATEGORIES_WITH_ROWS` lists only the four that
+returned rows — so a downstream consumer cannot mistake an uncorroborated value for a
+confirmed one.
+
+**(d) Recs response shape.** `GET {RECS}/api/recs/{uuid}/` returned 200 with a
+top-level array of 24,392 items — classified `curated-list` (a non-empty array, not a
+map/object keyed by business id). `GET /api/rec-score/` returned 405 (Method Not
+Allowed), so it was **not run** and its shape (e.g. a score map) remains undetermined.
+
+**Facet keys** (informational, not part of the personal-lists question): 
+`GET /api/filter-configs/` returned 200 with facet keys `CITY, GOODFOR, SCORE,
+NUMFRIENDS, CUISINE, PRICECODE, BOROUGH, NEIGHBORHOOD, COUNTRY`. `POST
+/api/filter-options/` — which would give the legal values inside each facet — failed
+with 500 (Internal Server Error), so per-facet legal values remain unresolved.
+
+**(e) What remains unresolved after this run:**
+
+| Question                                                          | Status                              |
+|---------------------------------------------------------------------|-----------------------------------|
+| `list_field` value selecting **Recs**                                | **UNRESOLVED** — no candidate confirmed |
+| Per-facet legal values (`filter-options`)                            | **UNRESOLVED** — 500 error         |
+| `/api/rec-score/` response shape                                     | **UNRESOLVED** — 405, not run      |
+| Whether `BAKERY`/`DESSERT`/`COFFEE`/`OTHER` are real distinct categories or silently-ignored values | **UNRESOLVED** — 0 rows either way |
+| `TRENDING` / `RECOMMENDED` as `list_field` candidates                | **UNRESOLVED** — 503/504, transient failures, not tested to a conclusion |
+
+None of these is filled with a guess. `discovered.ts` marks each as UNRESOLVED
+(`LIST_FIELD.RECS = null`) rather than substituting a plausible-sounding value, per the
+project's evidence standard: a wrong `list_field` would silently return the wrong list.
 
 ## Warning for the next node
+
+*(This section is preserved from the original 2026-09-10 run for history. As of the
+2026-09-11 live run above, the question it warns about has been positively answered —
+`filter-list` DOES serve both personal lists — so the warning itself is now moot. It is
+kept, unedited, below for context; do not read it as still describing the current
+state.)*
 
 Do **not** read this run as evidence that `filter-list` cannot serve the personal lists,
 and do **not** default to a client-side fetch-and-filter backend on the strength of it.

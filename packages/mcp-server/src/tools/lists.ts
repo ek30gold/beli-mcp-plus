@@ -43,10 +43,13 @@ export function registerListTools(server: McpServer, ctx: AppContext): void {
 /**
  * Search/filter tool over the personal lists.
  *
- * Filtering happens client-side over the rows `get-ranking` / `get-bookmark`
- * return; see the header of @beli/client's lists.ts for why, and for what would
- * change if Beli's own `filter-list` endpoint were ever pinned down. Each call
- * fetches one category's list, so it is one upstream request per invocation.
+ * Which backend runs is controlled by `BELI_LIST_BACKEND` (see config.ts /
+ * `ListBackend` in @beli/client) and defaults to filtering client-side over
+ * the rows `get-ranking` / `get-bookmark` return — see the header of
+ * @beli/client's lists.ts for why that is the default, and what the "server"
+ * backend adds now that Beli's own `filter-list` endpoint has been pinned
+ * down. Each call fetches at least one category's list, so it is at least one
+ * upstream request per invocation.
  */
 export function registerListSearchTools(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -85,17 +88,22 @@ export function registerListSearchTools(server: McpServer, ctx: AppContext): voi
     guard(async ({ list, category, userId, ...rest }) => {
       await ctx.throttle();
       const filter: ListFilter = rest;
+      const backend = ctx.config.listBackend;
       const results = await ctx.client.searchList(
         list as ListName,
         category,
         filter,
         userId,
+        backend,
       );
       return ok({
         count: results.length,
         // Say plainly where the filtering happened, so a caller never mistakes
-        // these for server-side filtered results.
-        filteredBy: "client-side over get-ranking/get-bookmark",
+        // these for a backend other than the one that actually ran.
+        filteredBy:
+          backend === "server"
+            ? "server-side membership via POST /api/filter-list/, filtered/sorted client-side"
+            : "client-side over get-ranking/get-bookmark",
         results,
       });
     }),

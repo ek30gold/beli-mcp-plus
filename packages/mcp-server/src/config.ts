@@ -22,6 +22,16 @@ export interface Config {
   probeOutputPath: string;
   /** Where `probe --emit-discovered` writes the generated contract file. */
   discoveredOutputPath: string;
+  /**
+   * Which implementation `search_list` uses — see `ListBackend` in
+   * `@beli/client`. "client" (default) filters over get-ranking/get-bookmark
+   * rows already fetched; "server" also calls `POST /api/filter-list/` with
+   * the confirmed `list_field` (see `LIST_FIELD` in `@beli/contract`'s
+   * discovered.ts). Stays "client" by default even now that `list_field` is
+   * confirmed — flip with `BELI_LIST_BACKEND=server` once the server path has
+   * real-world confidence; any other/missing value is treated as "client".
+   */
+  listBackend: "client" | "server";
 }
 
 interface RawCreds {
@@ -113,5 +123,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     discoveredOutputPath:
       env.BELI_DISCOVERED_OUTPUT ??
       join(process.cwd(), "packages", "contract", "src", "discovered.ts"),
+    listBackend: env.BELI_LIST_BACKEND === "server" ? "server" : "client",
   };
 }

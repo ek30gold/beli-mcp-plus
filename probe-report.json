@@ -1,107 +1,402 @@
 {
-  "generatedAt": "2026-09-10T21:33:43.188Z",
+  "generatedAt": "2026-09-11T07:59:58.854Z",
   "appVersion": "9.3.1",
   "proxy": {
     "mode": "undici-agent",
-    "proxyUrl": "http://127.0.0.1:35521"
+    "proxyUrl": "http://127.0.0.1:36281"
   },
   "hosts": [
     {
       "host": "ONBOARD",
       "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
-      "reachable": false,
-      "status": null,
-      "ms": 285,
-      "blockedByEgress": true,
-      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
+      "reachable": true,
+      "status": 401,
+      "ms": 459
     },
     {
       "host": "API",
       "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
-      "reachable": false,
-      "status": null,
-      "ms": 257,
-      "blockedByEgress": true,
-      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
+      "reachable": true,
+      "status": 401,
+      "ms": 492
     },
     {
       "host": "RECS",
       "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
-      "reachable": false,
-      "status": null,
-      "ms": 278,
-      "blockedByEgress": true,
-      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
+      "reachable": true,
+      "status": 401,
+      "ms": 581
     },
     {
       "host": "ACTIVITY",
       "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
-      "reachable": false,
-      "status": null,
-      "ms": 242,
-      "blockedByEgress": true,
-      "error": "blocked by network egress policy (proxy refused CONNECT tunnel with 403)"
+      "reachable": true,
+      "status": 401,
+      "ms": 470
     }
   ],
   "session": {
-    "refreshTokenPresent": false,
-    "refreshTokenPreview": "(none)",
-    "refreshTokenValid": null,
+    "refreshTokenPresent": true,
+    "refreshTokenPreview": "eyJhbGciOiJI…",
+    "refreshTokenValid": true,
     "credentialsAvailable": true,
     "credentialIdentifierType": "email",
-    "loginAttempted": true,
-    "loginSucceeded": false,
-    "accessTokenPreview": "(none)",
-    "authenticated": false,
-    "userId": null,
-    "loginError": "blocked by network egress policy (proxy refused CONNECT tunnel with 403) — the host is not in this environment's allowed domains"
+    "loginAttempted": false,
+    "loginSucceeded": null,
+    "accessTokenPreview": "eyJhbGciOiJI…",
+    "authenticated": true,
+    "userId": "902c99ec-31bb-4c2b-bb65-2bd8c6848b91"
   },
   "categories": {
-    "skipped": true,
-    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
-    "candidatesTried": [],
-    "results": [],
-    "accepted": []
+    "skipped": false,
+    "candidatesTried": [
+      "RES",
+      "BAR",
+      "BAK",
+      "BAKERY",
+      "DES",
+      "DESSERT",
+      "COFFEE",
+      "OTHER"
+    ],
+    "results": [
+      {
+        "category": "RES",
+        "ok": true,
+        "status": 200,
+        "resultCount": 388
+      },
+      {
+        "category": "BAR",
+        "ok": true,
+        "status": 200,
+        "resultCount": 97
+      },
+      {
+        "category": "BAK",
+        "ok": true,
+        "status": 200,
+        "resultCount": 13
+      },
+      {
+        "category": "BAKERY",
+        "ok": true,
+        "status": 200,
+        "resultCount": 0
+      },
+      {
+        "category": "DES",
+        "ok": true,
+        "status": 200,
+        "resultCount": 19
+      },
+      {
+        "category": "DESSERT",
+        "ok": true,
+        "status": 200,
+        "resultCount": 0
+      },
+      {
+        "category": "COFFEE",
+        "ok": true,
+        "status": 200,
+        "resultCount": 0
+      },
+      {
+        "category": "OTHER",
+        "ok": true,
+        "status": 200,
+        "resultCount": 0
+      }
+    ],
+    "accepted": [
+      "RES",
+      "BAR",
+      "BAK",
+      "BAKERY",
+      "DES",
+      "DESSERT",
+      "COFFEE",
+      "OTHER"
+    ]
   },
   "listField": {
-    "skipped": true,
-    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
-    "beenIdCount": null,
-    "wantToTryIdCount": null,
-    "candidates": [],
-    "bestBeenCandidate": null,
-    "bestWantToTryCandidate": null,
-    "unresolvedCandidates": []
+    "skipped": false,
+    "requestTemplate": {
+      "filters": [],
+      "list_field": "<candidate>",
+      "user": "902c99ec-31bb-4c2b-bb65-2bd8c6848b91",
+      "user2": "902c99ec-31bb-4c2b-bb65-2bd8c6848b91",
+      "category": "RES",
+      "bounds": null,
+      "sort_method": "Most Trending",
+      "load_businesses": true
+    },
+    "beenIdCount": 388,
+    "wantToTryIdCount": 568,
+    "candidates": [
+      {
+        "candidate": "TRENDING",
+        "source": "static",
+        "ok": false,
+        "status": 503,
+        "count": null,
+        "sampleIds": [],
+        "error": "Beli API filterList -> 503: Service Unavailable",
+        "overlapBeen": null,
+        "overlapWantToTry": null,
+        "conclusion": "request failed — see error"
+      },
+      {
+        "candidate": "BEEN",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "RANKED",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "RANK",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 388,
+        "sampleIds": [
+          12288,
+          12290,
+          327682,
+          1036290,
+          12296
+        ],
+        "overlapBeen": {
+          "matched": 388,
+          "total": 388
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 388
+        },
+        "conclusion": "388/388 returned ids appear in get-ranking -> BEEN list"
+      },
+      {
+        "candidate": "WANT_TO_TRY",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "WANTTOTRY",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "BOOKMARK",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "BOOKMARKED",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 568,
+        "sampleIds": [
+          8192,
+          12289,
+          12292,
+          5,
+          7
+        ],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 568
+        },
+        "overlapWantToTry": {
+          "matched": 568,
+          "total": 568
+        },
+        "conclusion": "568/568 returned ids appear in get-bookmark -> WANT_TO_TRY list"
+      },
+      {
+        "candidate": "RECS",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "REC",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      },
+      {
+        "candidate": "RECOMMENDED",
+        "source": "static",
+        "ok": false,
+        "status": 504,
+        "count": null,
+        "sampleIds": [],
+        "error": "Beli API filterList -> 504: upstream request timeout",
+        "overlapBeen": null,
+        "overlapWantToTry": null,
+        "conclusion": "request failed — see error"
+      },
+      {
+        "candidate": "FRIEND_RECS",
+        "source": "static",
+        "ok": true,
+        "status": 200,
+        "count": 0,
+        "sampleIds": [],
+        "overlapBeen": {
+          "matched": 0,
+          "total": 0
+        },
+        "overlapWantToTry": {
+          "matched": 0,
+          "total": 0
+        },
+        "conclusion": "no ids returned — cannot classify against Been or Want-to-Try"
+      }
+    ],
+    "bestBeenCandidate": "RANK",
+    "bestWantToTryCandidate": "BOOKMARKED",
+    "unresolvedCandidates": [
+      "BEEN",
+      "RANKED",
+      "WANT_TO_TRY",
+      "WANTTOTRY",
+      "BOOKMARK",
+      "RECS",
+      "REC",
+      "FRIEND_RECS"
+    ]
   },
   "facets": {
-    "skipped": true,
-    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
+    "skipped": false,
     "filterConfigs": {
-      "ok": false,
-      "status": null,
-      "topLevelKeys": [],
-      "facetKeys": []
+      "ok": true,
+      "status": 200,
+      "topLevelKeys": [
+        "list_menu",
+        "list_pills"
+      ],
+      "facetKeys": [
+        "CITY",
+        "GOODFOR",
+        "SCORE",
+        "NUMFRIENDS",
+        "CUISINE",
+        "PRICECODE",
+        "BOROUGH",
+        "NEIGHBORHOOD",
+        "COUNTRY"
+      ]
     },
     "filterOptions": {
       "ok": false,
-      "status": null,
+      "status": 500,
+      "error": "Beli API filterOptions -> 500: Internal Server Error",
       "topLevelKeys": [],
       "facetKeys": []
     }
   },
   "recs": {
-    "skipped": true,
-    "skipReason": "could not authenticate — 4 of 4 Beli hosts are blocked by this environment's network egress policy. Add them to the environment's allowed domains; no credential change will help until then.",
+    "skipped": false,
     "recs": {
-      "ok": false,
-      "status": null,
-      "shape": "not-run",
-      "itemCount": null
+      "ok": true,
+      "status": 200,
+      "shape": "curated-list",
+      "itemCount": 24392
     },
     "recScore": {
       "ok": false,
-      "status": null,
-      "shape": "not-run"
+      "status": 405,
+      "shape": "not-run",
+      "error": "Beli API recScore -> 405: "
     }
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AddRankingRequest,
+  Business,
   buildOpenApiDocument,
   endpoints,
   SENTIMENT_VALUE,
@@ -52,5 +53,24 @@ describe("@beli/contract", () => {
     const doc = buildOpenApiDocument();
     expect(doc.openapi).toBe("3.1.0");
     expect(Object.keys(doc.paths ?? {}).length).toBeGreaterThan(5);
+  });
+});
+
+describe("Business.status nullability", () => {
+  it("accepts a null status, as returned live by GET /api/get-ranking/", () => {
+    // Regression: the live API returns `business.status: null` on real rows.
+    // `z.string().optional()` admits undefined but NOT null, so every
+    // get-ranking/get-bookmark parse threw — which silently blocked the
+    // list_field discovery probe (its Been/Want-to-Try reference lists come
+    // from those two endpoints) and made whole category values look rejected.
+    const parsed = Business.parse({ id: 1, name: "Test", status: null });
+    expect(parsed.status).toBeNull();
+  });
+
+  it("still accepts an absent and a string status", () => {
+    expect(Business.parse({ id: 1, name: "Test" }).status).toBeUndefined();
+    expect(Business.parse({ id: 1, name: "Test", status: "OPEN" }).status).toBe(
+      "OPEN",
+    );
   });
 });

@@ -34,6 +34,13 @@ export interface FakeBeliOptions {
   acceptedCategories?: string[];
   /** Body returned by GET /api/filter-configs/. */
   filterConfigs?: unknown;
+  /**
+   * Items GET /api/recs/{userId}/ returns, as the confirmed live envelope
+   * (a bare top-level array — see RECS_SHAPE.recs in @beli/contract's
+   * discovered.ts). Defaults to the pre-existing `{results: []}` stub when
+   * omitted, so tests that don't care about recs are unaffected.
+   */
+  recsItems?: unknown[];
   userId?: string;
 }
 
@@ -42,6 +49,8 @@ export interface FakeBeli {
   userId: string;
   /** Every list_field value the probe actually asked about. */
   listFieldsTried: string[];
+  /** Every POST /api/filter-list/ request body received, in order. */
+  filterListCalls: Array<Record<string, unknown>>;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -51,6 +60,7 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
   const userId = opts.userId ?? USER_ID;
   const accepted = opts.acceptedCategories ?? ["RES", "BAR", "COFFEE", "OTHER"];
   const listFieldsTried: string[] = [];
+  const filterListCalls: Array<Record<string, unknown>> = [];
 
   const rankingRows = (ids: number[]) =>
     ids.map((id, i) => ({
@@ -105,6 +115,7 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
     if (path === "/api/filter-list/" && method === "POST") {
       const field = String(body?.list_field ?? "");
       listFieldsTried.push(field);
+      filterListCalls.push(body ?? {});
       const ids = opts.filterList[field];
       if (!ids) return json({ detail: `Invalid list_field: ${field}` }, 400);
       return json({ results: ids, count: ids.length });
@@ -117,12 +128,16 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
       return json({ options: [] });
     }
 
-    // Recs endpoints — shape deliberately left to the caller's fixture.
-    if (path.startsWith("/api/recs/")) return json({ results: [] });
+    // Recs endpoint — bare top-level array is the only confirmed live
+    // shape; callers that care supply items via `recsItems`, otherwise this
+    // keeps returning the pre-existing empty-envelope stub unchanged.
+    if (path.startsWith("/api/recs/")) {
+      return json(opts.recsItems !== undefined ? opts.recsItems : { results: [] });
+    }
     if (path.startsWith("/api/rec-score/")) return json({ results: [] });
 
     return json({ detail: `Unhandled ${method} ${path}` }, 404);
   };
 
-  return { fetch: fetchImpl, userId, listFieldsTried };
+  return { fetch: fetchImpl, userId, listFieldsTried, filterListCalls };
 }
