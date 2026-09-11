@@ -21,11 +21,17 @@ export const PlaceId = z.string().min(1);
  * This is the UNION of every code observed across both reference projects:
  * the 3-letter short codes from beli-api-reference.md §4 (`RES`, `BAR`,
  * `BAK`, `DES`) plus the longer codes belimaps' OpenAPI capture uses
- * (`BAKERY`, `DESSERT`, `COFFEE`, `OTHER`). It is NOT confirmed whether the
- * live API accepts the short and long forms interchangeably (e.g. `BAK` vs.
- * `BAKERY`) for every category, or whether one form is stale — the exact
- * live set is resolved later by the discovery node (T5). Treat this enum as
- * intentionally over-inclusive until then.
+ * (`BAKERY`, `DESSERT`, `COFFEE`, `OTHER`).
+ *
+ * The 2026-09-11 live run (see `CATEGORIES` in discovered.ts) sent all eight
+ * to GET /api/get-ranking/ and none was rejected — but that settles less than
+ * it appears. Only `RES`, `BAR`, `DES` and `BAK` returned rows
+ * (`CATEGORIES_WITH_ROWS`); `BAKERY`, `DESSERT`, `COFFEE` and `OTHER` each
+ * returned HTTP 200 with zero results, which is indistinguishable from a
+ * value the endpoint silently ignores. So whether the short and long forms
+ * are interchangeable (`BAK` vs. `BAKERY`), or one form is stale, is STILL
+ * unresolved — an account that actually has bakeries filed under one of them
+ * would settle it. Keep this enum intentionally over-inclusive until then.
  */
 export const Category = z.enum([
   "RES",
