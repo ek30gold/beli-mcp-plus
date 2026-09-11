@@ -401,6 +401,21 @@ export class BeliClient {
     return filterListEntries(entries, filter);
   }
 
+  // ---- recs ----
+  /**
+   * Fetch a user's recommendations (GET {RECS}/api/recs/{uuid}/). Only the
+   * envelope is confirmed live — a top-level array of items, per
+   * `RECS_SHAPE.recs` in `@beli/contract`'s `discovered.ts` — so item
+   * fields are returned exactly as the API sent them (see `RecItem` in
+   * `@beli/contract`'s recs schema for why they're left untyped).
+   */
+  async getRecs(user?: string) {
+    await this.ensureAuth();
+    return this.request("recs", {
+      params: { userId: user ?? this.requireUserId() },
+    });
+  }
+
   // ---- reviews ----
   private rankingPayload(
     businessId: number,

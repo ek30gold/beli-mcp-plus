@@ -115,4 +115,37 @@ describe("full stack against a simulated Beli", () => {
     });
     await expect(client.getBeen("BAR")).rejects.toThrow(/400/);
   });
+
+  it("fetches recs as the confirmed bare-array envelope, items passed through untyped", async () => {
+    const recsItems = [
+      { business_id: 7316, expected_percentile: 0.92 },
+      { totally: "unmodeled shape — nothing about item fields is confirmed" },
+    ];
+    const { client } = await loggedInClient({
+      beenIds: BEEN, wantToTryIds: WANT, filterList: {}, recsItems,
+    });
+    const res = await client.getRecs();
+    expect(Array.isArray(res)).toBe(true);
+    // Items round-trip exactly as returned — no field is asserted or stripped.
+    expect(res).toEqual(recsItems);
+  });
+
+  it("fetches recs for an explicit userId", async () => {
+    const recsItems = [{ anything: "goes" }];
+    const { client } = await loggedInClient({
+      beenIds: BEEN, wantToTryIds: WANT, filterList: {}, recsItems,
+    });
+    const other = "99999999-8888-7777-6666-555555555555";
+    const res = await client.getRecs(other);
+    expect(res).toEqual(recsItems);
+  });
+
+  it("still accepts the legacy {results:[...]} envelope for recs (never observed live, kept for leniency)", async () => {
+    const { client } = await loggedInClient({
+      beenIds: BEEN, wantToTryIds: WANT, filterList: {},
+      // recsItems omitted -> fake defaults to the wrapped {results: []} stub.
+    });
+    const res = await client.getRecs();
+    expect(res).toEqual({ results: [] });
+  });
 });

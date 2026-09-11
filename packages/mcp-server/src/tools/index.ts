@@ -8,6 +8,7 @@ import { registerReviewTools } from "./reviews.js";
 import { registerPhotoTools } from "./photos.js";
 import { registerBookmarkTools } from "./bookmarks.js";
 import { registerDraftTools } from "./drafts.js";
+import { registerRecsTools } from "./recs.js";
 
 export function registerAllTools(server: McpServer, ctx: AppContext): void {
   registerAuthTools(server, ctx);
@@ -18,5 +19,6 @@ export function registerAllTools(server: McpServer, ctx: AppContext): void {
   registerPhotoTools(server, ctx);
   registerBookmarkTools(server, ctx);
   registerDraftTools(server, ctx);
+  registerRecsTools(server, ctx);
   registerDoctorTools(server, ctx);
 }

@@ -1,33 +1,38 @@
 import { z } from "zod";
-import { IntId } from "./common.js";
 
 /**
- * Recommendation endpoints. `recs` lives on the RECS host and is
- * "external sources only — not in our own HAR captures" per
- * beli-api-reference.md §1/§10; `rec-score` and `user-rec-scores` are on
- * the main API host but have no captured field shapes at all (only the
- * `Allow` header and "request body not captured" notes). All schemas here
- * are intentionally permissive.
+ * Recommendation endpoints. `recs` lives on the RECS host; `rec-score` and
+ * `user-rec-scores` are on the main API host. All schemas here are
+ * intentionally permissive — see the per-export notes for exactly what is
+ * and is not backed by live evidence.
+ *
+ * EVIDENCE STATUS for `recs` (2026-09-11 live probe, see
+ * `@beli/contract`'s `discovered.ts` `RECS_SHAPE.recs`):
+ *   CONFIRMED — GET {RECS}/api/recs/{uuid}/ returned HTTP 200 with a
+ *     top-level array (24,392 items on the probed account). That is the
+ *     ENTIRE confirmed shape.
+ *   UNCONFIRMED — the internal shape of one item. Nothing was captured
+ *     (live or otherwise) about what fields an item carries, so none are
+ *     asserted here. A prior draft of this schema modeled items after
+ *     belimaps' third-party OpenAPI capture (`business_id`,
+ *     `expected_percentile`) — that capture is not our own evidence, and
+ *     typing against it would let an assumption masquerade as a confirmed
+ *     field. Treat every item as opaque until a live capture says otherwise.
  */
 
 /**
- * One entry from GET {RECS}/api/recs/{userId}/, per belimaps-openapi.yaml
- * `RecItem`/`RecList`. Not corroborated by our own captures — treat as
- * unverified. `additionalProperties: true` in the source spec, mirrored
- * here via `.passthrough()`.
+ * One entry from GET {RECS}/api/recs/{uuid}/. Intentionally untyped: no
+ * item-level field was confirmed live. Consumers get the raw item back
+ * unmodified — do not add typed fields here without new live evidence.
  */
-export const RecItem = z
-  .object({
-    business_id: IntId,
-    expected_percentile: z.number().optional(),
-  })
-  .passthrough();
+export const RecItem = z.unknown();
 export type RecItem = z.infer<typeof RecItem>;
 
 /**
- * belimaps documents this as a bare array; since it is unverified and the
- * five-shape envelope convention (reference §5) means a `{results:[...]}`
- * wrapper is equally plausible for a real Beli endpoint, accept either.
+ * CONFIRMED (live): the top-level array. The `{results: [...]}` alternative
+ * below is accepted too — Beli's other list endpoints use both envelope
+ * conventions, so a caller that gets the wrapped form is not left unable to
+ * parse it — but only the bare array has ever actually been observed.
  */
 export const RecsResponse = z.union([
   z.array(RecItem),
