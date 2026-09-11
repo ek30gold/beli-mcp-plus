@@ -1,74 +1,103 @@
-# beli-mcp
+# beli-mcp-plus
 
-[![npm version](https://img.shields.io/npm/v/beli-mcp?color=cb3837&logo=npm)](https://www.npmjs.com/package/beli-mcp)
-[![MIT License](https://img.shields.io/npm/l/beli-mcp?color=blue)](./LICENSE)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-server-6E56CF)](https://modelcontextprotocol.io)
 
 An [MCP](https://modelcontextprotocol.io) server for [Beli](https://beliapp.com).
 **Log in once**, then search places, rank reviews, manage photos, and bookmark
-places from any MCP client (Claude Desktop, Cursor, VS Code, etc.).
-
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=beli&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImJlbGktbWNwIl19)
-[![Install in VS Code](https://img.shields.io/badge/Install%20in%20VS%20Code-0098FF?style=flat&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%7B%22name%22%3A%22beli%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22beli-mcp%22%5D%7D)
+places from any MCP client (Claude Code, Claude Desktop, Cursor, VS Code, etc.).
 
 > Unofficial. Built on a reverse-engineered private API (app v9.3.1); Beli makes
 > no compatibility guarantee. Use with your own account and rate-limit politely.
 
 ## Install / run
 
-No install needed — run it with `npx`:
+> **`beli-mcp-plus` is not published to npm yet**, so `npx beli-mcp-plus` will
+> not work. Run it from a clone, as below. Note that `npx beli-mcp` (no
+> `-plus`) installs the **upstream** project this is forked from — a different
+> server that does not have this fork's tools or its live-verified API
+> constants. Don't use it expecting this one.
 
 ```bash
-npx beli-mcp
+git clone https://github.com/ek30gold/beli-mcp-plus
+cd beli-mcp-plus
+npm install
+npm run build
 ```
 
-### Claude Desktop / Cursor config
+That produces a self-contained `packages/mcp-server/dist/cli.js`. Verify it:
+
+```bash
+node packages/mcp-server/dist/cli.js --help
+node packages/mcp-server/dist/cli.js probe   # read-only API diagnostics
+```
+
+### Claude Code
+
+```bash
+claude mcp add beli -- node /ABSOLUTE/PATH/TO/beli-mcp-plus/packages/mcp-server/dist/cli.js
+```
+
+Add `--scope user` to make it available in every project rather than just the
+current one:
+
+```bash
+claude mcp add --scope user beli -- node /ABSOLUTE/PATH/TO/beli-mcp-plus/packages/mcp-server/dist/cli.js
+```
+
+Check it with `claude mcp list`, or `/mcp` inside a session.
+
+### Claude Desktop / Cursor
+
+Claude Desktop reads `claude_desktop_config.json` (macOS:
+`~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`). Cursor
+reads `~/.cursor/mcp.json`. Both take the same shape:
 
 ```jsonc
 {
   "mcpServers": {
     "beli": {
-      "command": "npx",
-      "args": ["-y", "beli-mcp"]
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/beli-mcp-plus/packages/mcp-server/dist/cli.js"]
     }
   }
 }
 ```
 
-On **Windows**, wrap the command with `cmd /c`:
+Use an absolute path — these clients do not inherit your shell's working
+directory. Restart the client after editing.
 
-```jsonc
-{
-  "mcpServers": {
-    "beli": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "beli-mcp"]
-    }
-  }
-}
-```
+Once the package is published, the same config becomes
+`"command": "npx", "args": ["-y", "beli-mcp-plus"]` (on Windows,
+`"command": "cmd", "args": ["/c", "npx", "-y", "beli-mcp-plus"]`).
 
-No credentials go in the config — authenticate once with `npx beli-mcp login`
-(below). Login is by **phone number** (E.164), not email.
+### Any other MCP client
+
+The server speaks **stdio** and needs no arguments — point any MCP-compatible
+client at `node <path>/dist/cli.js`. Tools carry `readOnlyHint` annotations, so
+clients that distinguish read from write tools will do so correctly.
+
+No credentials go in the config — authenticate once with the `login` command
+(below). You can log in with **either an email or a phone number** (E.164).
 
 ## Log in once
 
-`beli-mcp` authenticates with a **one-time browser login** — no credentials in
-any client config, works the same for every MCP client:
+`beli-mcp-plus` authenticates with a **one-time browser login** — no credentials
+in any client config, works the same for every MCP client:
 
 ```bash
-npx beli-mcp login
+node packages/mcp-server/dist/cli.js login
 ```
 
-This opens a small **localhost** page in your browser, you enter your Beli phone
-+ password, and it's validated against Beli before the session is saved. Only
+This opens a small **localhost** page in your browser, you enter your Beli email
+or phone + password, and it's validated against Beli before the session is saved. Only
 **tokens** are persisted (to `~/.beli/session.json`, mode 0600) — your password
 is never stored. A single login lasts ~7 days (the refresh token lifetime); the
 20-minute access token is refreshed automatically.
 
 ```bash
-npx beli-mcp whoami    # show the saved user id
-npx beli-mcp logout    # clear the saved session
+node packages/mcp-server/dist/cli.js whoami    # show the saved user id
+node packages/mcp-server/dist/cli.js logout    # clear the saved session
 ```
 
 > `logout` clears the local session file only. It does not revoke the tokens
@@ -84,15 +113,18 @@ Once logged in, point any MCP client at the server with no secrets in its config
 ```jsonc
 {
   "mcpServers": {
-    "beli": { "command": "npx", "args": ["-y", "beli-mcp"] }
+    "beli": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/beli-mcp-plus/packages/mcp-server/dist/cli.js"]
+    }
   }
 }
 ```
 
 ### Headless / CI
 
-For non-interactive environments, set `BELI_PHONE` + `BELI_PASSWORD` and
-`beli-mcp login` will authenticate without opening a browser. Set
+For non-interactive environments, set `BELI_EMAIL` (or `BELI_PHONE`) +
+`BELI_PASSWORD` and `login` will authenticate without opening a browser. Set
 `BELI_NO_BROWSER=1` to never attempt to launch a browser.
 
 ### VS Code (secure prompt, no hardcoding)
@@ -104,20 +136,21 @@ input variables, then run a one-time headless login:
 // .vscode/mcp.json
 {
   "inputs": [
-    { "id": "beli-phone", "type": "promptString", "description": "Beli phone (+1…)" },
+    { "id": "beli-email", "type": "promptString", "description": "Beli email" },
     { "id": "beli-password", "type": "promptString", "description": "Beli password", "password": true }
   ],
   "servers": {
     "beli": {
-      "command": "npx",
-      "args": ["-y", "beli-mcp"],
-      "env": { "BELI_PHONE": "${input:beli-phone}", "BELI_PASSWORD": "${input:beli-password}" }
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/beli-mcp-plus/packages/mcp-server/dist/cli.js"],
+      "env": { "BELI_EMAIL": "${input:beli-email}", "BELI_PASSWORD": "${input:beli-password}" }
     }
   }
 }
 ```
 
-Login is by **phone number** (E.164), not email.
+Log in with **either an email or a phone number** (E.164) — use `BELI_PHONE`
+instead of `BELI_EMAIL` for the latter.
 
 ## Tools
 
@@ -135,6 +168,8 @@ Login is by **phone number** (E.164), not email.
 | `delete_photo` | **write** | Soft-delete a photo. |
 | `bookmark` / `unbookmark` | **write** | Add/remove from "Want to Try". |
 | `draft_*` | local | Compose a review offline and `draft_submit` it atomically. |
+| `get_recs` | read | Your Beli recommendations. Paged (`offset`/`limit`) — the list runs to tens of thousands of items. |
+| `login` / `logout` / `auth_status` | session | Sign in, clear the local session, or report who is signed in. |
 | `beli_doctor` | read | Diagnostics: host reachability, session/auth state, and endpoint probes. |
 
 ### A note on `search_list`
@@ -160,14 +195,15 @@ it — requests that bypass a proxy fail in ways that look like the API is down.
 ## Diagnostics
 
 ```bash
-npx beli-mcp probe
+node packages/mcp-server/dist/cli.js probe
 ```
 
 Runs read-only checks against the Beli API — host reachability, session/auth
 state, the accepted `category` values, resolved discovery-endpoint fields,
 facet configs, and the recs endpoints' response shape — and prints a report
 (also written to `probe-report.json`). Never mutates your account. The same
-checks are available as the `beli_doctor` MCP tool. See also `beli-mcp --help`.
+checks are available as the `beli_doctor` MCP tool. See also
+`node packages/mcp-server/dist/cli.js --help`.
 
 ### Completing API discovery
 
