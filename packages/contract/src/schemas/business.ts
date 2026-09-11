@@ -11,7 +11,7 @@ export const Business = z
     id: IntId,
     place_id: PlaceId.nullable().optional(),
     name: z.string(),
-    status: z.string().optional(),
+    status: z.string().nullable().optional(),
     city: z.string().nullable().optional(),
     borough: z.string().nullable().optional(),
     neighborhood: z.string().nullable().optional(),
