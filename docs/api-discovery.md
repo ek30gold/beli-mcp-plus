@@ -217,6 +217,105 @@ None of these is filled with a guess. `discovered.ts` marks each as UNRESOLVED
 (`LIST_FIELD.RECS = null`) rather than substituting a plausible-sounding value, per the
 project's evidence standard: a wrong `list_field` would silently return the wrong list.
 
+## Second live pass (2026-09-11), and the lockout that ended it
+
+A follow-up pass was triggered by the account owner noticing that the reported
+list sizes did not match the app: the app showed **Been 548 / Want to Try 702**,
+while this project had reported **388 / 568**.
+
+It produced several real findings, and then got the account deactivated. Both
+halves are recorded here, because the second is the more important lesson.
+
+### The counts were per-category, not totals
+
+Both `GET /api/get-ranking/` and `GET /api/get-bookmark/` require a `category`
+parameter, and the probe only ever sent `RES`. The previously reported 388 and
+568 were **restaurants only**, presented as if they were list totals.
+
+| Category | Been | Want to Try |
+|----------|-----:|------------:|
+| `RES`    | 388  | 568         |
+| `BAR`    | 97   | 87          |
+| `BAK`    | 13   | 34          |
+| `DES`    | 19   | 9           |
+| **Sum**  | **517** | **698**  |
+| App shows | **548** | **702** |
+| Unaccounted | **31** | **4**  |
+
+Note this does NOT invalidate the `list_field` result. That finding compared
+`filter-list` with `list_field: RANK` against `get-ranking` **for the same
+category**, an identity check; 388/388 and 568/568 remain exact. What was wrong
+was presenting those numbers as list sizes.
+
+### There are five categories, not four, and the fifth has no known code
+
+The app offers **Restaurants, Bars, Bakeries, Coffee & Tea, Ice Cream &
+Dessert**. The confirmed codes are `RES`, `BAR`, `BAK`, `DES` — all three
+letters. **Coffee & Tea is real and its code is UNKNOWN.** `COFFEE` is not it.
+`COF`, `CAF` and `TEA` are plausible on the three-letter pattern but **none was
+tested**, and a guess would silently return the wrong list.
+
+The 31 Been and 4 Want-to-Try unaccounted for above are most likely filed under
+Coffee & Tea. That is a hypothesis consistent with the arithmetic, not a
+finding.
+
+### get-bookmark is the reliable oracle for category codes; get-ranking is not
+
+This resolves a question the first pass had marked permanently unanswerable.
+
+- `GET /api/get-ranking/` returns **HTTP 200 with zero rows** for `BAKERY`,
+  `DESSERT`, `COFFEE`, `OTHER` — silently ignoring them, indistinguishable from
+  a real-but-empty category.
+- `GET /api/get-bookmark/` returns **HTTP 500** for those same four, and real
+  data for `RES`, `BAR`, `BAK`, `DES`.
+
+One endpoint ignoring a bad value while another rejects it is the tell. **The
+long forms are not valid category codes.**
+
+### The bookmark envelope is category-keyed with display names
+
+`GET /api/get-bookmark/?category=RES` returns `{"Restaurants": [...]}`. The
+observed keys are `Restaurants`, `Bars`, `Bakeries`, `Ice Cream & Dessert` —
+human display names, not codes, and the key varies with the category requested.
+
+### get-ranking does not paginate
+
+Confirmed by inspecting the raw envelope: exactly one top-level key, `results`.
+No `count`, no `next`. A 388-item list arrives complete in one response.
+
+### The lockout
+
+While chasing the missing 31, four throwaway debugging scripts each constructed
+a client with a **fresh in-memory session store**, so each did a **full
+credential login** rather than reusing the saved refresh token. Combined with
+bursts of list reads and a batch of guessed category codes (several answered
+500), this produced, within a few minutes, exactly the traffic signature of
+credential stuffing followed by scraping.
+
+The API then returned `401 {"detail":"User is inactive","code":"user_inactive"}`
+on authenticated requests, and `401 {"detail":"No active account found with the
+given credentials"}` on login. A password reset did not restore access. The
+account was deactivated server-side.
+
+Two things made this worse than it had to be:
+
+1. **The only throttle in the codebase was in the MCP server's `AppContext`.**
+   Any caller holding a `BeliClient` bypassed it completely, which is exactly
+   what the debug scripts did. A politeness limit at the tool layer protects
+   nothing.
+2. **The client answered the first `user_inactive` by re-authenticating and
+   retrying.** The signal that should have stopped everything instead generated
+   more traffic against an account the API was already refusing.
+
+Both are fixed in `packages/client/src/guard.ts`: pacing, a login budget, and a
+circuit breaker that trips on account-level rejections and never self-heals.
+See that file's header for the full rationale.
+
+**If you are reading this before running anything against a live account:** reuse
+the saved session, never loop logins, and treat the first account-level 401 as a
+full stop. The cost of getting this wrong is a real person losing access to
+years of their own data.
+
 ## Warning for the next node
 
 *(This section is preserved from the original 2026-09-10 run for history. As of the
