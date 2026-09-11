@@ -41,6 +41,13 @@ export interface FakeBeliOptions {
    * omitted, so tests that don't care about recs are unaffected.
    */
   recsItems?: unknown[];
+  /**
+   * Make POST /api/token/refresh/ reject with 401, as an expired or revoked
+   * refresh token would, to exercise the fall-through to credentials.
+   */
+  rejectRefresh?: boolean;
+  /** Make POST /api/token/ reject with 401, as bad credentials would. */
+  rejectLogin?: boolean;
   userId?: string;
 }
 
@@ -51,6 +58,8 @@ export interface FakeBeli {
   listFieldsTried: string[];
   /** Every POST /api/filter-list/ request body received, in order. */
   filterListCalls: Array<Record<string, unknown>>;
+  /** How many times each auth endpoint was called. */
+  authCalls: { login: number; refresh: number };
 }
 
 const json = (body: unknown, status = 200) =>
@@ -60,6 +69,7 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
   const userId = opts.userId ?? USER_ID;
   const accepted = opts.acceptedCategories ?? ["RES", "BAR", "COFFEE", "OTHER"];
   const listFieldsTried: string[] = [];
+  const authCalls = { login: 0, refresh: 0 };
   const filterListCalls: Array<Record<string, unknown>> = [];
 
   const rankingRows = (ids: number[]) =>
@@ -87,9 +97,13 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
     if (path === "/" || path === "") return json({ ok: true });
 
     if (path === "/api/token/" && method === "POST") {
+      authCalls.login += 1;
+      if (opts.rejectLogin) return json({ detail: "No active account found" }, 401);
       return json({ access: accessToken(userId), refresh: "refresh-token-value" });
     }
     if (path === "/api/token/refresh/" && method === "POST") {
+      authCalls.refresh += 1;
+      if (opts.rejectRefresh) return json({ detail: "Token is invalid or expired" }, 401);
       return json({ access: accessToken(userId) });
     }
     if (path === "/api/user/logged-in/") {
@@ -139,5 +153,5 @@ export function makeFakeBeli(opts: FakeBeliOptions): FakeBeli {
     return json({ detail: `Unhandled ${method} ${path}` }, 404);
   };
 
-  return { fetch: fetchImpl, userId, listFieldsTried, filterListCalls };
+  return { fetch: fetchImpl, userId, listFieldsTried, filterListCalls, authCalls };
 }
