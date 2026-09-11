@@ -147,11 +147,20 @@ Every other candidate tried for the personal lists — `BEEN`, `RANKED`, `WANT_T
 against and so no basis to confirm or rule them out either way.
 
 For Recs specifically: `RECS`, `REC`, and `FRIEND_RECS` all returned 200 with zero rows
-(same as above — no evidence either way); `TRENDING` failed with 503 (Service
-Unavailable) and `RECOMMENDED` failed with 504 (upstream timeout) — both look like
-transient upstream failures rather than rejected values, so they are worth re-probing
-rather than treated as ruled out. No candidate is being reported as the Recs
-`list_field` value. `discovered.ts` emits `LIST_FIELD.RECS = null` accordingly.
+(same as above — no evidence either way); `TRENDING` and `RECOMMENDED` both FAILED.
+
+**Correction from a later re-probe.** These two were first written up as transient
+upstream blips worth re-probing. They are not. Across three separate runs they failed
+every time (503 / 504 / 503) while every other candidate in the same request loop
+returned 200. A failure that reproduces on exactly two values, run after run, is
+consistent server behaviour specific to those values — not noise. What it MEANS is
+still unresolved: it could be a valid value whose backing query is broken, or an
+invalid value that happens to error as a 5xx rather than a 4xx, and the API gives us
+nothing to tell those apart. Recording it as "transient" would have understated a
+reproducible signal; recording it as "rejected" would overstate it. It is neither.
+
+No candidate is being reported as the Recs `list_field` value. `discovered.ts` emits
+`LIST_FIELD.RECS = null` accordingly.
 
 **(c) Live category enum.** All eight candidates the probe tried against
 `GET /api/get-ranking/` returned 200 (none was rejected with 400/422):
@@ -202,7 +211,7 @@ with 500 (Internal Server Error), so per-facet legal values remain unresolved.
 | `/api/rec-score/` response shape                                     | **UNRESOLVED** — 405, not run      |
 | Recs *item* field shape                                              | **RESOLVED** on follow-up run — `business_id`/`expected_percentile`, both `number`, on 24,392/24,392 items |
 | Whether `BAKERY`/`DESSERT`/`COFFEE`/`OTHER` are real distinct categories or silently-ignored values | **UNRESOLVED** — 0 rows either way |
-| `TRENDING` / `RECOMMENDED` as `list_field` candidates                | **UNRESOLVED** — 503/504, transient failures, not tested to a conclusion |
+| `TRENDING` / `RECOMMENDED` as `list_field` candidates                | **UNRESOLVED** — fail consistently (503/504/503 across three runs), not transient; cause indistinguishable from the response |
 
 None of these is filled with a guess. `discovered.ts` marks each as UNRESOLVED
 (`LIST_FIELD.RECS = null`) rather than substituting a plausible-sounding value, per the
