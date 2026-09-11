@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T07:54:41.494Z",
+  "generatedAt": "2026-09-11T07:59:58.854Z",
   "appVersion": "9.3.1",
   "proxy": {
     "mode": "undici-agent",
@@ -11,28 +11,28 @@
       "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 509
+      "ms": 459
     },
     {
       "host": "API",
       "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 291
+      "ms": 492
     },
     {
       "host": "RECS",
       "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 502
+      "ms": 581
     },
     {
       "host": "ACTIVITY",
       "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 486
+      "ms": 470
     }
   ],
   "session": {

@@ -159,8 +159,11 @@ rather than treated as ruled out. No candidate is being reported as the Recs
 means only that the request did not error — `BAKERY`, `DESSERT`, `COFFEE`, and `OTHER`
 each returned 0 results for this account, so the probe cannot distinguish "a real,
 distinct enum value this account simply has nothing filed under" from "a value the
-endpoint silently ignores." Only `RES` (388), `BAR` (97), and `BAK` (13) are backed by
-actual returned rows.
+endpoint silently ignores." Only `RES` (388), `BAR` (97), `DES` (19), and `BAK` (13) are
+backed by actual returned rows. `discovered.ts` encodes this split directly: `CATEGORIES`
+lists all eight accepted values, while `CATEGORIES_WITH_ROWS` lists only the four that
+returned rows — so a downstream consumer cannot mistake an uncorroborated value for a
+confirmed one.
 
 **(d) Recs response shape.** `GET {RECS}/api/recs/{uuid}/` returned 200 with a
 top-level array of 24,392 items — classified `curated-list` (a non-empty array, not a

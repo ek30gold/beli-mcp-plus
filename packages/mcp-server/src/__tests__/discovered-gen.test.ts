@@ -112,6 +112,41 @@ describe("renderDiscovered", () => {
     expect(out).not.toContain('"BAKERY"');
   });
 
+  it("does not claim a 0-row category is corroborated", async () => {
+    // The fake gives rows only to RES; BAR and COFFEE are accepted but empty.
+    // An HTTP 200 with no rows cannot be distinguished from a value the
+    // endpoint silently ignores, so it must not be reported as CONFIRMED.
+    const report = await reportFrom(
+      {
+        beenIds: BEEN,
+        wantToTryIds: WANT,
+        filterList: { RANKED: BEEN },
+        acceptedCategories: ["RES", "BAR", "COFFEE"],
+      },
+      dir,
+    );
+    const out = renderDiscovered(report);
+    expect(out).toContain("CONFIRMED (returned rows): RES (5)");
+    expect(out).toContain("UNCORROBORATED");
+    expect(out).toMatch(/UNCORROBORATED[\s\S]*BAR, COFFEE/);
+    expect(out).toContain('export const CATEGORIES_WITH_ROWS = ["RES"] as const');
+  });
+
+  it("cites only the facet sources that actually succeeded", async () => {
+    const report = await reportFrom(
+      { beenIds: BEEN, wantToTryIds: WANT, filterList: { RANKED: BEEN } },
+      dir,
+    );
+    const out = renderDiscovered(report);
+    const facetBlock = out.slice(out.indexOf("Facet keys observed in"));
+    // A failed endpoint must never be listed as provenance for observed keys.
+    if (facetBlock.includes("Contributed nothing (failed): /api/filter-options/")) {
+      expect(facetBlock).not.toMatch(
+        /CONFIRMED — observed live in [^\n]*filter-options/,
+      );
+    }
+  });
+
   it("produces a file that actually compiles as TypeScript", async () => {
     const report = await reportFrom(
       { beenIds: BEEN, wantToTryIds: WANT, filterList: { RANKED: BEEN, BOOKMARK: WANT } },

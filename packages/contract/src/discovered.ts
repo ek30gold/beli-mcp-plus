@@ -4,7 +4,7 @@
  * Produced by `beli-mcp-plus probe --emit-discovered` from a live run against
  * the Beli API. Re-run the probe to regenerate; hand edits are overwritten.
  *
- * Generated:   2026-09-11T07:54:41.494Z
+ * Generated:   2026-09-11T07:59:58.854Z
  * Account:     902c99ec-31bb-4c2b-bb65-2bd8c6848b91
  * App version: 9.3.1
  * Authenticated: yes
@@ -38,14 +38,21 @@ export const LIST_FIELD = {
 export const FILTER_LIST_SERVES_PERSONAL_LISTS = true;
 
 /**
- * Category values GET /api/get-ranking/ accepted live.
- * CONFIRMED — accepted: [RES, BAR, BAK, BAKERY, DES, DESSERT, COFFEE, OTHER]; rejected: [none]
+ * Category values GET /api/get-ranking/ accepted live (no error).
+ * CONFIRMED (returned rows): RES (388), BAR (97), BAK (13), DES (19)
+ * UNCORROBORATED (HTTP 200 but 0 rows — cannot be distinguished from a
+ *   value the endpoint silently ignores): BAKERY, DESSERT, COFFEE, OTHER
+ * rejected: none
  */
 export const CATEGORIES = ["RES", "BAR", "BAK", "BAKERY", "DES", "DESSERT", "COFFEE", "OTHER"] as const;
 
+/** Subset of CATEGORIES actually corroborated by returned rows. */
+export const CATEGORIES_WITH_ROWS = ["RES", "BAR", "BAK", "DES"] as const;
+
 /**
- * Facet keys seen in /api/filter-configs/ and /api/filter-options/.
- * CONFIRMED — observed live
+ * Facet keys observed in: /api/filter-configs/.
+ * Contributed nothing (failed): /api/filter-options/ (500).
+ * CONFIRMED — observed live in /api/filter-configs/
  */
 export const FACET_KEYS = ["CITY", "GOODFOR", "SCORE", "NUMFRIENDS", "CUISINE", "PRICECODE", "BOROUGH", "NEIGHBORHOOD", "COUNTRY"] as const;
 

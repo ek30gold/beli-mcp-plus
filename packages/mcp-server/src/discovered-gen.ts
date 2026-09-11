@@ -49,6 +49,40 @@ export function renderDiscovered(report: ProbeReport): string {
     ? []
     : report.categories.results.filter((r) => !r.ok).map((r) => r.category);
 
+  // A 200 with zero rows is NOT evidence that the value is a real category: it
+  // is indistinguishable from a value the endpoint silently ignores. Only
+  // categories that actually returned rows are corroborated, so the two groups
+  // are emitted separately rather than flattened into one CONFIRMED list.
+  const categoriesWithRows = report.categories.skipped
+    ? []
+    : report.categories.results
+        .filter((r) => r.ok && (r.resultCount ?? 0) > 0)
+        .map((r) => `${r.category} (${r.resultCount})`);
+  const categoriesNoRows = report.categories.skipped
+    ? []
+    : report.categories.results
+        .filter((r) => r.ok && (r.resultCount ?? 0) === 0)
+        .map((r) => r.category);
+
+  // Only cite sources that actually succeeded — a failed endpoint contributes
+  // no keys and must not appear as provenance for the ones we did observe.
+  const facetSources = report.facets.skipped
+    ? []
+    : [
+        ...(report.facets.filterConfigs.ok ? ["/api/filter-configs/"] : []),
+        ...(report.facets.filterOptions.ok ? ["/api/filter-options/"] : []),
+      ];
+  const facetFailures = report.facets.skipped
+    ? []
+    : [
+        ...(report.facets.filterConfigs.ok
+          ? []
+          : [`/api/filter-configs/ (${report.facets.filterConfigs.status ?? "failed"})`]),
+        ...(report.facets.filterOptions.ok
+          ? []
+          : [`/api/filter-options/ (${report.facets.filterOptions.status ?? "failed"})`]),
+      ];
+
   const facetKeys = report.facets.skipped
     ? []
     : [...new Set([...report.facets.filterConfigs.facetKeys, ...report.facets.filterOptions.facetKeys])];
@@ -103,20 +137,50 @@ export function renderDiscovered(report: ProbeReport): string {
   lines.push("");
 
   lines.push("/**");
-  lines.push(" * Category values GET /api/get-ranking/ accepted live.");
-  lines.push(
-    ` * ${categories.length > 0 ? `CONFIRMED — accepted: [${categories.join(", ")}]; rejected: [${rejected.join(", ") || "none"}]` : "UNRESOLVED — category probe did not run"}`,
-  );
+  lines.push(" * Category values GET /api/get-ranking/ accepted live (no error).");
+  if (categories.length > 0) {
+    lines.push(
+      ` * CONFIRMED (returned rows): ${categoriesWithRows.join(", ") || "none"}`,
+    );
+    lines.push(
+      ` * UNCORROBORATED (HTTP 200 but 0 rows — cannot be distinguished from a`,
+    );
+    lines.push(
+      ` *   value the endpoint silently ignores): ${categoriesNoRows.join(", ") || "none"}`,
+    );
+    lines.push(` * rejected: ${rejected.join(", ") || "none"}`);
+  } else {
+    lines.push(" * UNRESOLVED — category probe did not run");
+  }
   lines.push(" */");
   lines.push(
     `export const CATEGORIES = ${categories.length > 0 ? `[${categories.map(q).join(", ")}] as const` : "[] as const"};`,
   );
   lines.push("");
+  lines.push("/** Subset of CATEGORIES actually corroborated by returned rows. */");
+  lines.push(
+    `export const CATEGORIES_WITH_ROWS = ${
+      categoriesWithRows.length > 0
+        ? `[${report.categories.results
+            .filter((r) => r.ok && (r.resultCount ?? 0) > 0)
+            .map((r) => q(r.category))
+            .join(", ")}] as const`
+        : "[] as const"
+    };`,
+  );
+  lines.push("");
 
   lines.push("/**");
-  lines.push(" * Facet keys seen in /api/filter-configs/ and /api/filter-options/.");
   lines.push(
-    ` * ${facetKeys.length > 0 ? "CONFIRMED — observed live" : "UNRESOLVED — facet probe did not run or returned no keys"}`,
+    ` * Facet keys observed in: ${facetSources.join(", ") || "(no source succeeded)"}.`,
+  );
+  if (facetFailures.length > 0) {
+    lines.push(
+      ` * Contributed nothing (failed): ${facetFailures.join(", ")}.`,
+    );
+  }
+  lines.push(
+    ` * ${facetKeys.length > 0 ? `CONFIRMED — observed live in ${facetSources.join(", ")}` : "UNRESOLVED — facet probe did not run or returned no keys"}`,
   );
   lines.push(" */");
   lines.push(
