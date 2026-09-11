@@ -7,6 +7,28 @@ const Category = z
   .enum(["RES", "BAR", "COFFEE", "BAKERY", "DESSERT", "OTHER"])
   .default("RES");
 
+/**
+ * `category` accepts any single category, or "all".
+ *
+ * "all" is the default because the single-category behaviour was a silent
+ * correctness trap: both endpoints require a category, so a caller asking for
+ * "my Been list" got one category's rows and no indication the rest existed.
+ * On the probed account that meant 388 restaurants standing in for a 548-place
+ * list, with nothing in the response hinting at the other 160.
+ */
+const CategoryOrAll = z.union([Category, z.literal("all")]);
+
+/**
+ * Attached to single-category responses so a partial list can never be
+ * mistaken for a whole one, mirroring `AggregatedList.incompleteReason`.
+ */
+const SINGLE_CATEGORY_NOTE = {
+  incompleteReason:
+    "This is ONE category only. Beli splits these lists across Restaurants, " +
+    "Bars, Bakeries, Coffee & Tea and Ice Cream & Dessert. Pass category:'all' " +
+    "for every confirmed category.",
+} as const;
+
 export function registerListTools(server: McpServer, ctx: AppContext): void {
   server.registerTool(
     "get_been",
@@ -14,13 +36,17 @@ export function registerListTools(server: McpServer, ctx: AppContext): void {
       title: "Get Been list",
       description:
         "List a user's ranked 'Been' places for a category. Omit userId for yourself.",
-      inputSchema: { category: Category, userId: z.string().uuid().optional() },
+      inputSchema: {
+        category: CategoryOrAll.default("all"),
+        userId: z.string().uuid().optional(),
+      },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     guard(async ({ category, userId }) => {
       await ctx.throttle();
+      if (category === "all") return ok(await ctx.client.allBeen(userId));
       const res = await ctx.client.getBeen(category, userId);
-      return ok(res.results);
+      return ok({ category, entries: res.results, ...SINGLE_CATEGORY_NOTE });
     }),
   );
 
@@ -30,12 +56,17 @@ export function registerListTools(server: McpServer, ctx: AppContext): void {
       title: "Get Want-to-Try list",
       description:
         "List a user's 'Want to Try' bookmarks for a category. Omit userId for yourself.",
-      inputSchema: { category: Category, userId: z.string().uuid().optional() },
+      inputSchema: {
+        category: CategoryOrAll.default("all"),
+        userId: z.string().uuid().optional(),
+      },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     guard(async ({ category, userId }) => {
       await ctx.throttle();
-      return ok(await ctx.client.getWantToTry(category, userId));
+      if (category === "all") return ok(await ctx.client.allWantToTry(userId));
+      const buckets = await ctx.client.getWantToTry(category, userId);
+      return ok({ category, buckets, ...SINGLE_CATEGORY_NOTE });
     }),
   );
 }

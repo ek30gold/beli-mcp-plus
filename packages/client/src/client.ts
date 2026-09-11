@@ -1,4 +1,5 @@
 import {
+  CATEGORIES_CONFIRMED,
   endpoints,
   LIST_FIELD,
   LoginRequest,
@@ -22,6 +23,7 @@ import {
   normalizeWantToTry,
   type ListBackend,
   type ListEntry,
+  type AggregatedList,
   type ListFilter,
   type ListName,
 } from "./lists.js";
@@ -432,6 +434,68 @@ export class BeliClient {
     return this.request("getRanking", {
       query: { user: user ?? this.requireUserId(), category },
     });
+  }
+
+  /**
+   * Fetch a personal list across EVERY confirmed category, not just one.
+   *
+   * `getBeen`/`getWantToTry` take a single category, and both endpoints
+   * require one. That made it easy to present a single category's rows as if
+   * they were the whole list: the probed account's Been list read as 388
+   * (restaurants) when the app showed 548 across all categories.
+   *
+   * The returned `incompleteReason` is the important part. `CATEGORIES_CONFIRMED`
+   * is KNOWN to be missing the app's Coffee & Tea category, whose code has
+   * never been confirmed, so even this aggregate is short. Callers must be able
+   * to say "this total is incomplete" rather than presenting it as final —
+   * quietly returning a plausible-looking wrong number is the failure being
+   * fixed here, and a four-category total presented as complete would just be a
+   * bigger version of the same bug.
+   */
+  private async listAllCategories(
+    list: ListName,
+    user?: string,
+  ): Promise<AggregatedList> {
+    const byCategory: Record<string, number> = {};
+    const failed: Record<string, string> = {};
+    const entries: ListEntry[] = [];
+
+    for (const category of CATEGORIES_CONFIRMED) {
+      try {
+        const rows =
+          list === "been"
+            ? normalizeBeen(await this.getBeen(category, user))
+            : normalizeWantToTry(await this.getWantToTry(category, user));
+        byCategory[category] = rows.length;
+        entries.push(...rows);
+      } catch (err) {
+        // A guard error means stop entirely, not "skip this category".
+        rethrowIfGuardError(err);
+        // Otherwise record the gap instead of silently dropping a category:
+        // a partial total that looks complete is the bug being fixed.
+        failed[category] = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    return {
+      entries,
+      byCategory,
+      failedCategories: failed,
+      incompleteReason:
+        "The app also has a Coffee & Tea category whose API code has never been " +
+        "confirmed (COFFEE is not it), so this total excludes it. Treat it as a " +
+        "lower bound, not the full list.",
+    };
+  }
+
+  /** Been list across every confirmed category. See {@link listAllCategories}. */
+  allBeen(user?: string): Promise<AggregatedList> {
+    return this.listAllCategories("been", user);
+  }
+
+  /** Want-to-Try across every confirmed category. See {@link listAllCategories}. */
+  allWantToTry(user?: string): Promise<AggregatedList> {
+    return this.listAllCategories("want_to_try", user);
   }
 
   async getWantToTry(category: Category = "RES", user?: string) {
