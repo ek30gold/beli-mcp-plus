@@ -147,8 +147,37 @@ export interface FacetProbe {
 export interface RecsProbe {
   skipped: boolean;
   skipReason?: string;
-  recs: { ok: boolean; status: number | null; error?: string; shape: RecsShape; itemCount: number | null };
+  recs: {
+    ok: boolean;
+    status: number | null;
+    error?: string;
+    shape: RecsShape;
+    itemCount: number | null;
+    /** Key/type evidence for one item, or null when no item was seen. */
+    itemKeys: RecsItemKeyEvidence | null;
+  };
   recScore: { ok: boolean; status: number | null; error?: string; shape: RecsShape };
+}
+
+/**
+ * Evidence about the internal shape of a recs item.
+ *
+ * Records key NAMES and observed value TYPES only — never values. The probe
+ * report is committed to the repo, and item values are live account data; the
+ * names and types are all that is needed to justify typing a schema field.
+ *
+ * `universalKeys` are present on EVERY item examined, so they are safe to type
+ * as required. `partialKeys` appear on some items only and must stay optional.
+ */
+export interface RecsItemKeyEvidence {
+  /** How many items were examined (the full array, not a sample of it). */
+  itemsExamined: number;
+  /** Keys present on every examined item. */
+  universalKeys: string[];
+  /** Keys present on some but not all examined items. */
+  partialKeys: string[];
+  /** key -> the distinct JSON value types observed for it, sorted. */
+  keyTypes: Record<string, string[]>;
 }
 
 export type RecsShape = "curated-list" | "score-map" | "empty" | "unknown" | "not-run";
@@ -809,17 +838,72 @@ function classifyShape(data: unknown): RecsShape {
   return "unknown";
 }
 
+/** JSON-ish type name for one value, used as schema-typing evidence. */
+function typeName(v: unknown): string {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  return typeof v;
+}
+
+/**
+ * Summarize the key names and value types across every recs item.
+ *
+ * Deliberately records no values — see {@link RecsItemKeyEvidence}. Returns
+ * null when there is no object item to learn anything from, so an empty or
+ * non-object list yields no evidence rather than a misleading empty summary.
+ */
+export function summarizeItemKeys(items: unknown[]): RecsItemKeyEvidence | null {
+  const objects = items.filter(
+    (it): it is Record<string, unknown> =>
+      it !== null && typeof it === "object" && !Array.isArray(it),
+  );
+  if (objects.length === 0) return null;
+
+  const counts = new Map<string, number>();
+  const types = new Map<string, Set<string>>();
+  for (const obj of objects) {
+    for (const [k, v] of Object.entries(obj)) {
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+      if (!types.has(k)) types.set(k, new Set());
+      types.get(k)!.add(typeName(v));
+    }
+  }
+
+  const universalKeys: string[] = [];
+  const partialKeys: string[] = [];
+  for (const [k, n] of counts) {
+    (n === objects.length ? universalKeys : partialKeys).push(k);
+  }
+  universalKeys.sort();
+  partialKeys.sort();
+
+  const keyTypes: Record<string, string[]> = {};
+  for (const k of [...universalKeys, ...partialKeys]) {
+    keyTypes[k] = [...types.get(k)!].sort();
+  }
+
+  return { itemsExamined: objects.length, universalKeys, partialKeys, keyTypes };
+}
+
 async function probeRecs(client: BeliClient, userId: string, throttle: () => Promise<void>): Promise<RecsProbe> {
   await throttle();
-  const recsOut: RecsProbe["recs"] = { ok: false, status: null, shape: "not-run", itemCount: null };
+  const recsOut: RecsProbe["recs"] = {
+    ok: false,
+    status: null,
+    shape: "not-run",
+    itemCount: null,
+    itemKeys: null,
+  };
   try {
     const raw = await client.request("recs", { params: { userId } });
     const shape = classifyShape(raw);
-    const itemCount = Array.isArray(raw) ? raw.length : raw.results.length;
+    const items = Array.isArray(raw) ? raw : raw.results;
+    const itemCount = items.length;
     recsOut.ok = true;
     recsOut.status = 200;
     recsOut.shape = shape;
     recsOut.itemCount = itemCount;
+    recsOut.itemKeys = summarizeItemKeys(items);
   } catch (err) {
     const { status, message } = errInfo(err);
     recsOut.status = status;
@@ -907,7 +991,7 @@ export async function runProbe({ client, config, throttle }: RunProbeOptions): P
     recs = {
       skipped: true,
       skipReason: notAuthReason,
-      recs: { ok: false, status: null, shape: "not-run", itemCount: null },
+      recs: { ok: false, status: null, shape: "not-run", itemCount: null, itemKeys: null },
       recScore: { ok: false, status: null, shape: "not-run" },
     };
   } else {
@@ -1129,6 +1213,17 @@ export function formatHumanReport(report: ProbeReport): string {
     lines.push(
       `  /api/rec-score/:    ${rs.ok ? `200, shape=${rs.shape}` : `FAILED status=${rs.status ?? "?"} ${rs.error ?? ""}`}`,
     );
+    if (r.itemKeys) {
+      const k = r.itemKeys;
+      lines.push(`  item shape (from ${k.itemsExamined} items, key names/types only):`);
+      lines.push(`    on EVERY item:  ${k.universalKeys.join(", ") || "(none)"}`);
+      lines.push(`    on SOME items:  ${k.partialKeys.join(", ") || "(none)"}`);
+      for (const key of [...k.universalKeys, ...k.partialKeys]) {
+        lines.push(`      ${key}: ${(k.keyTypes[key] ?? []).join(" | ")}`);
+      }
+    } else if (r.ok) {
+      lines.push("  item shape: no object item to examine — item fields remain UNRESOLVED");
+    }
     lines.push(
       `  verdict: ${r.shape === "curated-list" ? "looks like a CURATED LIST of places" : r.shape === "score-map" ? "looks like a SCORE MAP keyed by business id" : "shape unconfirmed"}`,
     );

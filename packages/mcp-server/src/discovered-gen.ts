@@ -212,5 +212,50 @@ export function renderDiscovered(report: ProbeReport): string {
   lines.push("} as const;");
   lines.push("");
 
+  // Item-level field evidence. Only keys seen on EVERY item are safe to type
+  // as required; anything partial stays optional, and no evidence at all means
+  // the item shape stays UNRESOLVED rather than being inferred.
+  const itemKeys = report.recs.skipped ? null : report.recs.recs.itemKeys;
+  lines.push("/**");
+  lines.push(" * Field evidence for ONE item from GET {RECS}/api/recs/{uuid}/.");
+  if (itemKeys) {
+    lines.push(
+      ` * CONFIRMED — every one of ${itemKeys.itemsExamined} items examined live carried`,
+    );
+    lines.push(
+      ` *   these keys: ${itemKeys.universalKeys.join(", ") || "(none)"}`,
+    );
+    if (itemKeys.partialKeys.length > 0) {
+      lines.push(
+        ` * PARTIAL (present on some items only — must stay optional): ${itemKeys.partialKeys.join(", ")}`,
+      );
+    }
+    lines.push(" * Observed value types are recorded below. Key names and types only —");
+    lines.push(" * no item values are captured, since this file is committed.");
+  } else {
+    lines.push(" * UNRESOLVED — no object item was available to examine. Do NOT type");
+    lines.push(" * item fields from a third-party doc or from a plausible-sounding name.");
+  }
+  lines.push(" */");
+  if (itemKeys) {
+    lines.push("export const RECS_ITEM_SHAPE = {");
+    lines.push(`  itemsExamined: ${itemKeys.itemsExamined},`);
+    lines.push(
+      `  universalKeys: [${itemKeys.universalKeys.map(q).join(", ")}] as const,`,
+    );
+    lines.push(
+      `  partialKeys: [${itemKeys.partialKeys.map(q).join(", ")}] as const,`,
+    );
+    lines.push("  keyTypes: {");
+    for (const key of [...itemKeys.universalKeys, ...itemKeys.partialKeys]) {
+      lines.push(`    ${q(key)}: [${(itemKeys.keyTypes[key] ?? []).map(q).join(", ")}] as const,`);
+    }
+    lines.push("  },");
+    lines.push("} as const;");
+  } else {
+    lines.push("export const RECS_ITEM_SHAPE = null;");
+  }
+  lines.push("");
+
   return lines.join("\n");
 }
