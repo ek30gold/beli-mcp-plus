@@ -6,6 +6,7 @@ import { BeliClient, MemorySessionStore } from "@beli/client";
 import { loadConfig } from "../config.js";
 import {
   detectEgressBlock,
+  summarizeItemKeys,
   detectEgressBlockFromError,
   extractListFieldHints,
   formatHumanReport,
@@ -276,5 +277,42 @@ describe("detectEgressBlockFromError", () => {
     expect(detectEgressBlockFromError("something went wrong")).toBeNull();
     expect(detectEgressBlockFromError(null)).toBeNull();
     expect(detectEgressBlockFromError(undefined)).toBeNull();
+  });
+});
+
+describe("summarizeItemKeys", () => {
+  it("separates keys present on every item from partial ones", () => {
+    const ev = summarizeItemKeys([
+      { business_id: 1, expected_percentile: 0.5 },
+      { business_id: 2, expected_percentile: 0.6, extra: "x" },
+    ]);
+    expect(ev).not.toBeNull();
+    expect(ev!.itemsExamined).toBe(2);
+    expect(ev!.universalKeys).toEqual(["business_id", "expected_percentile"]);
+    expect(ev!.partialKeys).toEqual(["extra"]);
+  });
+
+  it("records every observed type for a key, so a mixed field can't be mistyped", () => {
+    const ev = summarizeItemKeys([{ score: 1 }, { score: null }, { score: "x" }]);
+    expect(ev!.keyTypes.score).toEqual(["null", "number", "string"]);
+    // Mixed types still count as universal — present on every item.
+    expect(ev!.universalKeys).toEqual(["score"]);
+  });
+
+  it("captures key names and types only, never values", () => {
+    const ev = summarizeItemKeys([{ business_id: 7316 }]);
+    // The report is committed to the repo; item values are live account data.
+    expect(JSON.stringify(ev)).not.toContain("7316");
+  });
+
+  it("returns null when there is no object item to learn from", () => {
+    expect(summarizeItemKeys([])).toBeNull();
+    expect(summarizeItemKeys([1, "two", null])).toBeNull();
+  });
+
+  it("ignores non-object entries mixed in with objects", () => {
+    const ev = summarizeItemKeys([{ a: 1 }, null, 5, { a: 2 }]);
+    expect(ev!.itemsExamined).toBe(2);
+    expect(ev!.universalKeys).toEqual(["a"]);
   });
 });

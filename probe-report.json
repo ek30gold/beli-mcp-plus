@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-11T07:59:58.854Z",
+  "generatedAt": "2026-09-11T08:36:23.993Z",
   "appVersion": "9.3.1",
   "proxy": {
     "mode": "undici-agent",
-    "proxyUrl": "http://127.0.0.1:36281"
+    "proxyUrl": "http://127.0.0.1:43963"
   },
   "hosts": [
     {
@@ -11,28 +11,28 @@
       "url": "https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 459
+      "ms": 615
     },
     {
       "host": "API",
       "url": "https://backoffice-service-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 492
+      "ms": 525
     },
     {
       "host": "RECS",
       "url": "https://backoffice-service-recs-t57o3dxfca-nn.a.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 581
+      "ms": 505
     },
     {
       "host": "ACTIVITY",
       "url": "https://activity-service-978733420956.northamerica-northeast1.run.app",
       "reachable": true,
       "status": 401,
-      "ms": 470
+      "ms": 638
     }
   ],
   "session": {
@@ -316,10 +316,10 @@
         "candidate": "RECOMMENDED",
         "source": "static",
         "ok": false,
-        "status": 504,
+        "status": 503,
         "count": null,
         "sampleIds": [],
-        "error": "Beli API filterList -> 504: upstream request timeout",
+        "error": "Beli API filterList -> 503: Service Unavailable",
         "overlapBeen": null,
         "overlapWantToTry": null,
         "conclusion": "request failed — see error"
@@ -390,7 +390,23 @@
       "ok": true,
       "status": 200,
       "shape": "curated-list",
-      "itemCount": 24392
+      "itemCount": 24392,
+      "itemKeys": {
+        "itemsExamined": 24392,
+        "universalKeys": [
+          "business_id",
+          "expected_percentile"
+        ],
+        "partialKeys": [],
+        "keyTypes": {
+          "business_id": [
+            "number"
+          ],
+          "expected_percentile": [
+            "number"
+          ]
+        }
+      }
     },
     "recScore": {
       "ok": false,

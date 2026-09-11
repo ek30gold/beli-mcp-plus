@@ -9,23 +9,35 @@ import { z } from "zod";
  * EVIDENCE STATUS for `recs` (2026-09-11 live probe, see
  * `@beli/contract`'s `discovered.ts` `RECS_SHAPE.recs`):
  *   CONFIRMED — GET {RECS}/api/recs/{uuid}/ returned HTTP 200 with a
- *     top-level array (24,392 items on the probed account). That is the
- *     ENTIRE confirmed shape.
- *   UNCONFIRMED — the internal shape of one item. Nothing was captured
- *     (live or otherwise) about what fields an item carries, so none are
- *     asserted here. A prior draft of this schema modeled items after
- *     belimaps' third-party OpenAPI capture (`business_id`,
- *     `expected_percentile`) — that capture is not our own evidence, and
- *     typing against it would let an assumption masquerade as a confirmed
- *     field. Treat every item as opaque until a live capture says otherwise.
+ *     top-level array (24,392 items on the probed account).
+ *   CONFIRMED — the item shape. The probe now records each item's key names
+ *     and value types (never values), and every one of those 24,392 items
+ *     carried exactly `business_id: number` and `expected_percentile: number`,
+ *     with no partial keys. See `RECS_ITEM_SHAPE` in discovered.ts.
+ *
+ * Note on provenance: an earlier draft typed these same two fields from
+ * belimaps' third-party OpenAPI capture, and they were removed precisely
+ * because that capture is not our own evidence. They are restored here only
+ * because a live run independently confirmed them across the full item
+ * population — the third-party doc happening to be right does not make it
+ * evidence, and it is still not what this schema rests on.
  */
 
 /**
- * One entry from GET {RECS}/api/recs/{uuid}/. Intentionally untyped: no
- * item-level field was confirmed live. Consumers get the raw item back
- * unmodified — do not add typed fields here without new live evidence.
+ * One entry from GET {RECS}/api/recs/{uuid}/.
+ *
+ * Both fields are CONFIRMED live on 100% of items examined (see the evidence
+ * note above), so they are required rather than optional. `.passthrough()`
+ * keeps any field we have not seen — an item is not narrowed to these two, it
+ * is only guaranteed to contain them. Do not add a field here without the
+ * same class of evidence: a name appearing in a third-party doc is not enough.
  */
-export const RecItem = z.unknown();
+export const RecItem = z
+  .object({
+    business_id: z.number(),
+    expected_percentile: z.number(),
+  })
+  .passthrough();
 export type RecItem = z.infer<typeof RecItem>;
 
 /**

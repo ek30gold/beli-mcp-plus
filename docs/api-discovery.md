@@ -170,6 +170,23 @@ top-level array of 24,392 items — classified `curated-list` (a non-empty array
 map/object keyed by business id). `GET /api/rec-score/` returned 405 (Method Not
 Allowed), so it was **not run** and its shape (e.g. a score map) remains undetermined.
 
+**Item shape — resolved on a follow-up run.** The first live run recorded only the
+item *count*, which left the item's internal shape unresolved and forced `RecItem`
+to `z.unknown()`. The probe now also records each item's key names and value types
+(never values — this report is committed to the repo, and item values are live
+account data). Result: **every one of the 24,392 items** carried exactly
+`business_id: number` and `expected_percentile: number`, with no partial keys. That
+is population-wide evidence rather than a sample, so `RecItem` types both as
+required, with `.passthrough()` so unseen fields survive. See `RECS_ITEM_SHAPE` in
+`discovered.ts`.
+
+Worth recording why this took two runs. An earlier draft of the schema typed these
+same two fields from belimaps' third-party OpenAPI capture, and they were removed
+because that capture is not our own evidence. The third-party doc turned out to be
+right — but it was still right to remove them, and right to restore them only after
+a live run confirmed them independently. A source being correct by luck is not the
+same as it being evidence.
+
 **Facet keys** (informational, not part of the personal-lists question): 
 `GET /api/filter-configs/` returned 200 with facet keys `CITY, GOODFOR, SCORE,
 NUMFRIENDS, CUISINE, PRICECODE, BOROUGH, NEIGHBORHOOD, COUNTRY`. `POST
@@ -183,6 +200,7 @@ with 500 (Internal Server Error), so per-facet legal values remain unresolved.
 | `list_field` value selecting **Recs**                                | **UNRESOLVED** — no candidate confirmed |
 | Per-facet legal values (`filter-options`)                            | **UNRESOLVED** — 500 error         |
 | `/api/rec-score/` response shape                                     | **UNRESOLVED** — 405, not run      |
+| Recs *item* field shape                                              | **RESOLVED** on follow-up run — `business_id`/`expected_percentile`, both `number`, on 24,392/24,392 items |
 | Whether `BAKERY`/`DESSERT`/`COFFEE`/`OTHER` are real distinct categories or silently-ignored values | **UNRESOLVED** — 0 rows either way |
 | `TRENDING` / `RECOMMENDED` as `list_field` candidates                | **UNRESOLVED** — 503/504, transient failures, not tested to a conclusion |
 

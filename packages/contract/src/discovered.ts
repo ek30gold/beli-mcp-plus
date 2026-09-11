@@ -4,7 +4,7 @@
  * Produced by `beli-mcp-plus probe --emit-discovered` from a live run against
  * the Beli API. Re-run the probe to regenerate; hand edits are overwritten.
  *
- * Generated:   2026-09-11T07:59:58.854Z
+ * Generated:   2026-09-11T08:36:23.993Z
  * Account:     902c99ec-31bb-4c2b-bb65-2bd8c6848b91
  * App version: 9.3.1
  * Authenticated: yes
@@ -65,4 +65,21 @@ export const FACET_KEYS = ["CITY", "GOODFOR", "SCORE", "NUMFRIENDS", "CUISINE", 
 export const RECS_SHAPE = {
   recs: "curated-list",
   recScore: "not-run",
+} as const;
+
+/**
+ * Field evidence for ONE item from GET {RECS}/api/recs/{uuid}/.
+ * CONFIRMED — every one of 24392 items examined live carried
+ *   these keys: business_id, expected_percentile
+ * Observed value types are recorded below. Key names and types only —
+ * no item values are captured, since this file is committed.
+ */
+export const RECS_ITEM_SHAPE = {
+  itemsExamined: 24392,
+  universalKeys: ["business_id", "expected_percentile"] as const,
+  partialKeys: [] as const,
+  keyTypes: {
+    "business_id": ["number"] as const,
+    "expected_percentile": ["number"] as const,
+  },
 } as const;

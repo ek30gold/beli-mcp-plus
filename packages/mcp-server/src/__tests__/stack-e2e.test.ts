@@ -116,10 +116,17 @@ describe("full stack against a simulated Beli", () => {
     await expect(client.getBeen("BAR")).rejects.toThrow(/400/);
   });
 
-  it("fetches recs as the confirmed bare-array envelope, items passed through untyped", async () => {
+  it("fetches recs as the confirmed bare-array envelope, keeping unmodeled fields", async () => {
+    // business_id/expected_percentile are confirmed on 100% of live items, so
+    // they are required; anything else must still survive untouched, since the
+    // schema guarantees those two are present, not that they are all there is.
     const recsItems = [
       { business_id: 7316, expected_percentile: 0.92 },
-      { totally: "unmodeled shape — nothing about item fields is confirmed" },
+      {
+        business_id: 8821,
+        expected_percentile: 0.41,
+        totally: "unmodeled extra — must not be stripped",
+      },
     ];
     const { client } = await loggedInClient({
       beenIds: BEEN, wantToTryIds: WANT, filterList: {}, recsItems,
@@ -131,13 +138,24 @@ describe("full stack against a simulated Beli", () => {
   });
 
   it("fetches recs for an explicit userId", async () => {
-    const recsItems = [{ anything: "goes" }];
+    const recsItems = [{ business_id: 1, expected_percentile: 0.5, anything: "goes" }];
     const { client } = await loggedInClient({
       beenIds: BEEN, wantToTryIds: WANT, filterList: {}, recsItems,
     });
     const other = "99999999-8888-7777-6666-555555555555";
     const res = await client.getRecs(other);
     expect(res).toEqual(recsItems);
+  });
+
+  it("rejects a recs item missing a field confirmed on every live item", async () => {
+    // Deliberate strictness: business_id/expected_percentile were present on
+    // all 24,392 items examined live, so an item without them contradicts the
+    // captured evidence and should surface rather than be silently accepted.
+    const { client } = await loggedInClient({
+      beenIds: BEEN, wantToTryIds: WANT, filterList: {},
+      recsItems: [{ business_id: 7316 }],
+    });
+    await expect(client.getRecs()).rejects.toThrow();
   });
 
   it("still accepts the legacy {results:[...]} envelope for recs (never observed live, kept for leniency)", async () => {
