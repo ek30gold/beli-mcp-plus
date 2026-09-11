@@ -1,12 +1,12 @@
 name: Publish
 
-# Publishes beli-mcp to npm when you create a GitHub Release.
+# Publishes beli-mcp-plus to npm when you create a GitHub Release.
 #
 # Tokenless: uses npm Trusted Publishing (OIDC) — NO npm token / secret required.
 # One-time setup on npmjs.com after the package exists (first publish is done
-# locally): npmjs.com -> beli-mcp -> Settings -> Trusted Publisher -> add
+# locally): npmjs.com -> beli-mcp-plus -> Settings -> Trusted Publisher -> add
 #   Provider:   GitHub Actions
-#   Repository: jcjc-dev/beli-mcp
+#   Repository: ek30gold/beli-mcp-plus
 #   Workflow:   publish.yml
 # Provenance is attached automatically when publishing via OIDC.
 
@@ -32,5 +32,5 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
-      - name: Publish beli-mcp to npm (Trusted Publishing, no token)
-        run: npm publish --workspace beli-mcp --access public
+      - name: Publish beli-mcp-plus to npm (Trusted Publishing, no token)
+        run: npm publish --workspace beli-mcp-plus --access public
