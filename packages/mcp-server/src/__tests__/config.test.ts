@@ -105,3 +105,26 @@ describe("loadConfig — credential resolution order", () => {
     expect(config.password).toBeUndefined();
   });
 });
+
+describe("loadConfig — BELI_LIST_BACKEND", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "beli-config-listbackend-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("defaults to client-side filtering when unset", () => {
+    expect(loadConfig({ BELI_HOME: dir }).listBackend).toBe("client");
+  });
+
+  it("switches to the server backend only on an exact 'server' value", () => {
+    expect(loadConfig({ BELI_HOME: dir, BELI_LIST_BACKEND: "server" }).listBackend).toBe("server");
+  });
+
+  it("treats any other value as client-side rather than erroring", () => {
+    expect(loadConfig({ BELI_HOME: dir, BELI_LIST_BACKEND: "SERVER" }).listBackend).toBe("client");
+    expect(loadConfig({ BELI_HOME: dir, BELI_LIST_BACKEND: "bogus" }).listBackend).toBe("client");
+  });
+});

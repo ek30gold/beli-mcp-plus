@@ -3,23 +3,31 @@ import type { Business } from "@beli/contract";
 /**
  * Client-side search and filtering over a user's personal lists.
  *
- * WHY THIS IS CLIENT-SIDE
- * -----------------------
+ * WHY THIS IS CLIENT-SIDE (and still the default)
+ * ------------------------------------------------
  * Beli's own `POST /api/filter-list/` takes a `list_field` parameter that
- * selects which list to filter server-side. As of 2026-09-10 nobody has
+ * selects which list to filter server-side. As of 2026-09-10 nobody had
  * established what `list_field` values select Been, Want to Try or Recs — the
  * discovery run that was meant to settle it never reached the API (see
- * docs/api-discovery.md). Rather than block the feature on that unknown, the
- * filtering here runs over the rows the already-proven endpoints return:
- * `GET /api/get-ranking/` for Been and `GET /api/get-bookmark/` for Want to Try.
+ * docs/api-discovery.md, original 2026-09-10 section). Rather than block the
+ * feature on that unknown, the filtering here runs over the rows the
+ * already-proven endpoints return: `GET /api/get-ranking/` for Been and
+ * `GET /api/get-bookmark/` for Want to Try.
  *
- * This is a deliberate trade, not a conclusion that `filter-list` cannot work:
+ * A live run on 2026-09-11 DID resolve `list_field` for both personal lists
+ * (see `LIST_FIELD`/`FILTER_LIST_SERVES_PERSONAL_LISTS` in `@beli/contract`'s
+ * `discovered.ts`). `BeliClient.searchList` now accepts an optional `backend`
+ * argument ("client" | "server", see `ListBackend`) that calls `filter-list`
+ * with the confirmed value instead. It still defaults to "client" here —
+ * unflipped on purpose until the server path has run against real accounts —
+ * and this module's pure functions are exactly what BOTH backends filter
+ * through, so neither can silently diverge from the other's behavior.
+ *
+ * This was always a deliberate trade, not a conclusion that `filter-list`
+ * cannot work:
  *   - it fetches a whole category's list and filters in process, so it does
  *     more network work than a server-side filter would, and
  *   - it can only filter on fields those endpoints actually return.
- * When `list_field` is established, a server-side backend can be added behind
- * the same {@link ListFilter} shape and chosen at runtime. Nothing here assumes
- * `filter-list` is unusable.
  *
  * Everything in this module is pure: it takes rows and returns rows, so it is
  * testable without a network and without an account.
@@ -27,6 +35,16 @@ import type { Business } from "@beli/contract";
 
 /** Which personal list to read. */
 export type ListName = "been" | "want_to_try";
+
+/**
+ * Which implementation {@link BeliClient.searchList} uses.
+ *  - "client": fetch the whole category via get-ranking/get-bookmark and
+ *    filter with {@link filterListEntries} (see module header). Default.
+ *  - "server": also call `POST /api/filter-list/` with the confirmed
+ *    `list_field` for `list` to obtain the authoritative id set for that
+ *    list, then filter with the same {@link filterListEntries}.
+ */
+export type ListBackend = "client" | "server";
 
 /** How to order results. Ties always break on name so paging is stable. */
 export type ListSort = "score_desc" | "score_asc" | "name_asc" | "name_desc";

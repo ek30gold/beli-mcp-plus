@@ -22,6 +22,7 @@ export {
   normalizeBeen,
   normalizeWantToTry,
   sortListEntries,
+  type ListBackend,
   type ListEntry,
   type ListFilter,
   type ListName,

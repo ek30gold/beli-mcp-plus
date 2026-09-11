@@ -20,11 +20,14 @@ function captureServer() {
 }
 
 /** AppContext with a stubbed client; no network, no credentials. */
-function ctxWith(client: Partial<{ searchList: (...a: any[]) => Promise<unknown> }>) {
+function ctxWith(
+  client: Partial<{ searchList: (...a: any[]) => Promise<unknown> }>,
+  config: Record<string, unknown> = {},
+) {
   return new AppContext(
     client as any,
     {} as any,
-    { minIntervalMs: 0, allowWrites: false } as any,
+    { minIntervalMs: 0, allowWrites: false, ...config } as any,
   );
 }
 
@@ -92,6 +95,47 @@ describe("search_list tool", () => {
       list: "want_to_try", category: "BAR", userId: uuid, limit: 50, offset: 0, sort: "score_desc",
     });
     expect(seen[3]).toBe(uuid);
+  });
+
+  it("defaults to the client backend and says so", async () => {
+    let seen: any[] = [];
+    const { server, tools } = captureServer();
+    registerListSearchTools(
+      server,
+      ctxWith({
+        searchList: async (...args: any[]) => {
+          seen = args;
+          return [];
+        },
+      }),
+    );
+    const res = await tools.get("search_list")!.handler({
+      list: "been", category: "RES", limit: 50, offset: 0, sort: "score_desc",
+    });
+    expect(seen[4]).toBeUndefined(); // config.listBackend unset on the stub
+    expect(JSON.parse(res.content[0].text).filteredBy).toContain("client-side");
+  });
+
+  it("passes the 'server' backend through and reports it, when configured", async () => {
+    let seen: any[] = [];
+    const { server, tools } = captureServer();
+    registerListSearchTools(
+      server,
+      ctxWith(
+        {
+          searchList: async (...args: any[]) => {
+            seen = args;
+            return [];
+          },
+        },
+        { listBackend: "server" },
+      ),
+    );
+    const res = await tools.get("search_list")!.handler({
+      list: "been", category: "RES", limit: 50, offset: 0, sort: "score_desc",
+    });
+    expect(seen[4]).toBe("server");
+    expect(JSON.parse(res.content[0].text).filteredBy).toContain("filter-list");
   });
 
   it("surfaces a client error as a structured tool error, not a throw", async () => {
