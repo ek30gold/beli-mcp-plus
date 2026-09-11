@@ -44,7 +44,7 @@ describe("get_recs tool", () => {
     const res = await tools.get("get_recs")!.handler({});
     const payload = JSON.parse(res.content[0].text);
 
-    expect(payload.count).toBe(2);
+    expect(payload.total).toBe(2);
     expect(payload.itemShapeConfirmed).toBe(false);
     // Items must round-trip exactly — the tool must never narrow, rename or
     // drop fields it hasn't confirmed exist.
@@ -57,7 +57,7 @@ describe("get_recs tool", () => {
 
     const res = await tools.get("get_recs")!.handler({});
     const payload = JSON.parse(res.content[0].text);
-    expect(payload.count).toBe(1);
+    expect(payload.total).toBe(1);
     expect(payload.items).toEqual([{ x: 1 }]);
   });
 
@@ -107,5 +107,48 @@ describe("get_recs tool", () => {
     const res = await tools.get("get_recs")!.handler({});
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("login");
+  });
+
+  it("pages a large list instead of dumping every item", async () => {
+    // The live account returns 24,392 items; an uncapped response would
+    // swamp the caller's context, so the tool pages locally.
+    const many = Array.from({ length: 1200 }, (_, i) => ({ i }));
+    const { server, tools } = captureServer();
+    registerRecsTools(server, ctxWith({ getRecs: async () => many }));
+
+    const res = await tools.get("get_recs")!.handler({ offset: 10, limit: 25 });
+    const payload = JSON.parse(res.content[0].text);
+
+    expect(payload.total).toBe(1200);
+    expect(payload.returned).toBe(25);
+    expect(payload.offset).toBe(10);
+    expect(payload.hasMore).toBe(true);
+    expect(payload.items).toHaveLength(25);
+    expect(payload.items[0]).toEqual({ i: 10 });
+  });
+
+  it("bounds the page even when no limit was applied by the caller", async () => {
+    const many = Array.from({ length: 1200 }, (_, i) => ({ i }));
+    const { server, tools } = captureServer();
+    registerRecsTools(server, ctxWith({ getRecs: async () => many }));
+
+    const res = await tools.get("get_recs")!.handler({});
+    const payload = JSON.parse(res.content[0].text);
+
+    expect(payload.returned).toBe(50);
+    expect(payload.total).toBe(1200);
+    expect(payload.hasMore).toBe(true);
+  });
+
+  it("reports hasMore false on the final page", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ i }));
+    const { server, tools } = captureServer();
+    registerRecsTools(server, ctxWith({ getRecs: async () => many }));
+
+    const res = await tools.get("get_recs")!.handler({ offset: 20, limit: 50 });
+    const payload = JSON.parse(res.content[0].text);
+
+    expect(payload.returned).toBe(10);
+    expect(payload.hasMore).toBe(false);
   });
 });
