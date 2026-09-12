@@ -1,11 +1,24 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { CATEGORIES_CONFIRMED } from "@beli/contract";
 import type { ListFilter, ListName } from "@beli/client";
 import { AppContext, guard, ok } from "../context.js";
 
-const Category = z
-  .enum(["RES", "BAR", "COFFEE", "BAKERY", "DESSERT", "OTHER"])
-  .default("RES");
+/**
+ * The only category codes confirmed to work (CATEGORIES_CONFIRMED in
+ * @beli/contract; oracle discussion in docs/api-discovery.md): get-bookmark
+ * rejects an invalid code with a 500 while get-ranking silently returns
+ * 200-with-zero-rows, so the long forms (BAKERY, DESSERT, COFFEE, OTHER) are
+ * proven NOT valid and must not be offered as if they worked. This enum
+ * previously listed exactly those long forms and omitted the confirmed BAK
+ * and DES, so bakeries and desserts could not be queried at all and four of
+ * six choices silently returned nothing.
+ *
+ * The app's fifth category (Coffee & Tea) has no confirmed code, so it cannot
+ * appear here either; that gap is surfaced through the aggregate's
+ * incompleteReason rather than by guessing a code.
+ */
+const Category = z.enum(CATEGORIES_CONFIRMED).default("RES");
 
 /**
  * `category` accepts any single category, or "all".

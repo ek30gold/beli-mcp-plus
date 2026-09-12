@@ -33,10 +33,13 @@ describe("get_recs tool", () => {
     expect(tool!.config.annotations.readOnlyHint).toBe(true);
   });
 
-  it("returns the confirmed bare-array envelope with items passed through untyped", async () => {
+  it("returns the confirmed bare-array envelope with items passed through, extra fields intact", async () => {
+    // Item shape is confirmed (business_id / expected_percentile, both
+    // numbers, on all 24,392 probed items); unmodeled fields must still
+    // round-trip untouched, per RecItem's .passthrough().
     const recsItems = [
       { business_id: 7316, expected_percentile: 0.92 },
-      { shape: "unconfirmed — anything could be here" },
+      { business_id: 42, expected_percentile: 0.5, some_future_field: "kept" },
     ];
     const { server, tools } = captureServer();
     registerRecsTools(server, ctxWith({ getRecs: async () => recsItems }));
@@ -45,7 +48,7 @@ describe("get_recs tool", () => {
     const payload = JSON.parse(res.content[0].text);
 
     expect(payload.total).toBe(2);
-    expect(payload.itemShapeConfirmed).toBe(false);
+    expect(payload.itemShapeConfirmed).toBe(true);
     // Items must round-trip exactly — the tool must never narrow, rename or
     // drop fields it hasn't confirmed exist.
     expect(payload.items).toEqual(recsItems);

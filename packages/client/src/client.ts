@@ -600,11 +600,12 @@ export class BeliClient {
 
   // ---- recs ----
   /**
-   * Fetch a user's recommendations (GET {RECS}/api/recs/{uuid}/). Only the
-   * envelope is confirmed live — a top-level array of items, per
-   * `RECS_SHAPE.recs` in `@beli/contract`'s `discovered.ts` — so item
-   * fields are returned exactly as the API sent them (see `RecItem` in
-   * `@beli/contract`'s recs schema for why they're left untyped).
+   * Fetch a user's recommendations (GET {RECS}/api/recs/{uuid}/). Both the
+   * envelope (a top-level array, per `RECS_SHAPE.recs` in `@beli/contract`'s
+   * `discovered.ts`) and the item shape are confirmed live: every one of the
+   * probed account's 24,392 items carried `business_id` and
+   * `expected_percentile`, both numbers. `RecItem` types both as required
+   * with `.passthrough()`, so any unmodeled field survives the round trip.
    */
   async getRecs(user?: string) {
     await this.ensureAuth();
@@ -699,12 +700,17 @@ export class BeliClient {
     fd.set("favorite_dish", args.favoriteDish ? "true" : "false");
 
     const e = endpoints.uploadPhoto;
+    // Through the guard like every other outbound call: a direct fetch would
+    // bypass pacing, and the breaker would never see an account-level
+    // rejection (429 / user_inactive) coming back from an upload.
+    await this.guard.beforeRequest();
     const res = await fetch(buildUrl(e.host, e.path), {
       method: "POST",
       headers: { ...baseHeaders(), Authorization: `Bearer ${this.state.access}` },
       body: fd,
     });
     const text = await res.text();
+    this.guard.noteResponse(res.status, text);
     if (!res.ok) throw new BeliApiError(res.status, e.id, text);
     return e.response.parse(JSON.parse(text));
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Business } from "@beli/contract";
 import { AppContext } from "../context.js";
-import { registerListSearchTools } from "../tools/lists.js";
+import { registerListSearchTools, registerListTools } from "../tools/lists.js";
 
 const biz = (id: number, name: string, over: Partial<Business> = {}): Business =>
   ({ id, name, ...over }) as Business;
@@ -153,5 +153,41 @@ describe("search_list tool", () => {
     });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("login");
+  });
+});
+
+describe("category enum — only live-confirmed codes are offered", () => {
+  // The tool layer previously listed the long forms (COFFEE, BAKERY, DESSERT,
+  // OTHER) that get-bookmark proves invalid (500) and get-ranking silently
+  // ignores (200 with zero rows), while omitting the confirmed BAK and DES.
+  const schemas = () => {
+    const { server, tools } = captureServer();
+    registerListTools(server, ctxWith({}));
+    registerListSearchTools(server, ctxWith({ searchList: async () => [] }));
+    return ["get_been", "get_want_to_try", "search_list"].map(
+      (name) => [name, tools.get(name)!.config.inputSchema.category] as const,
+    );
+  };
+
+  it("accepts every confirmed code (RES, BAR, BAK, DES)", () => {
+    for (const [name, schema] of schemas()) {
+      for (const code of ["RES", "BAR", "BAK", "DES"]) {
+        expect(schema.safeParse(code).success, `${name} must accept ${code}`).toBe(true);
+      }
+    }
+  });
+
+  it("rejects the long forms proven invalid by get-bookmark", () => {
+    for (const [name, schema] of schemas()) {
+      for (const code of ["COFFEE", "BAKERY", "DESSERT", "OTHER"]) {
+        expect(schema.safeParse(code).success, `${name} must reject ${code}`).toBe(false);
+      }
+    }
+  });
+
+  it("still defaults to a useful value", () => {
+    for (const [, schema] of schemas()) {
+      expect(schema.safeParse(undefined).success).toBe(true);
+    }
   });
 });
