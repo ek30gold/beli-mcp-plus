@@ -78,5 +78,21 @@ export const RankingListItem = z
     visit_dates: z.array(IsoDate).optional(),
   })
   .passthrough();
-export const RankingListResponse = z.object({ results: z.array(RankingListItem) });
+/**
+ * GET /api/get-ranking/ envelope.
+ *
+ * Confirmed live (2026-09-11): the response carries exactly one top-level key,
+ * `results`. There is no `count` and no `next` — the endpoint returns the whole
+ * category in one shot rather than paginating, which is why a 388-item Been
+ * list arrives complete.
+ *
+ * `.passthrough()` anyway, matching every other schema here: without it an
+ * added sibling key would be silently dropped rather than surfaced, and a
+ * dropped `next` would look exactly like a complete list. That failure mode is
+ * the same shape as the `business.status` bug — quietly wrong, not loudly
+ * broken.
+ */
+export const RankingListResponse = z
+  .object({ results: z.array(RankingListItem) })
+  .passthrough();
 export type RankingListItem = z.infer<typeof RankingListItem>;

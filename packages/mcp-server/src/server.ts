@@ -19,6 +19,7 @@ export async function buildServer(config: Config = loadConfig()): Promise<BuiltS
     phone: config.phone,
     password: config.password,
     store: new FileSessionStore(config.sessionPath),
+    guard: { minIntervalMs: config.minIntervalMs },
   });
   await client.init();
 

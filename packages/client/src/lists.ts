@@ -205,3 +205,22 @@ export function sortListEntries(entries: ListEntry[], sort: ListSort = "score_de
       return copy;
   }
 }
+
+/**
+ * A personal list gathered across several categories.
+ *
+ * Carries its own caveats deliberately. `byCategory` lets a caller show the
+ * breakdown instead of one opaque number, `failedCategories` records categories
+ * that errored rather than dropping them silently, and `incompleteReason` states
+ * what is known to be missing. A total that hides any of these is how a
+ * partial list gets mistaken for a complete one.
+ */
+export interface AggregatedList {
+  entries: ListEntry[];
+  /** Row count per category code that succeeded. */
+  byCategory: Record<string, number>;
+  /** Category code -> error, for categories that could not be fetched. */
+  failedCategories: Record<string, string>;
+  /** Why this aggregate is still not the complete list. */
+  incompleteReason: string;
+}

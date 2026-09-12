@@ -23,15 +23,28 @@ export const PlaceId = z.string().min(1);
  * `BAK`, `DES`) plus the longer codes belimaps' OpenAPI capture uses
  * (`BAKERY`, `DESSERT`, `COFFEE`, `OTHER`).
  *
- * The 2026-09-11 live run (see `CATEGORIES` in discovered.ts) sent all eight
- * to GET /api/get-ranking/ and none was rejected — but that settles less than
- * it appears. Only `RES`, `BAR`, `DES` and `BAK` returned rows
- * (`CATEGORIES_WITH_ROWS`); `BAKERY`, `DESSERT`, `COFFEE` and `OTHER` each
- * returned HTTP 200 with zero results, which is indistinguishable from a
- * value the endpoint silently ignores. So whether the short and long forms
- * are interchangeable (`BAK` vs. `BAKERY`), or one form is stale, is STILL
- * unresolved — an account that actually has bakeries filed under one of them
- * would settle it. Keep this enum intentionally over-inclusive until then.
+ * RESOLVED (2026-09-11, second live pass). The long forms are NOT valid.
+ *
+ * GET /api/get-ranking/ accepts all eight without error, which made the
+ * question look unanswerable: the four long forms returned HTTP 200 with zero
+ * rows, indistinguishable from a value the endpoint silently ignores.
+ * GET /api/get-bookmark/ settles it. It answers HTTP 500 for `BAKERY`,
+ * `DESSERT`, `COFFEE` and `OTHER`, and returns real data for `RES`, `BAR`,
+ * `BAK` and `DES`. One endpoint ignoring a bad value while another rejects it
+ * is the tell: get-bookmark is the reliable oracle for whether a category code
+ * is real, and get-ranking is not.
+ *
+ * So the confirmed codes are the four three-letter ones, and the enum is kept
+ * over-inclusive only to avoid breaking a caller that still passes a long form.
+ * Prefer `CATEGORIES_CONFIRMED` below.
+ *
+ * INCOMPLETE, though: the app offers FIVE categories (Restaurants, Bars,
+ * Bakeries, Coffee & Tea, Ice Cream & Dessert). Coffee & Tea is real and its
+ * code is UNKNOWN — `COFFEE` is not it. Every confirmed code is three letters,
+ * so `COF`, `CAF` or `TEA` are plausible, but none has been tested and a guess
+ * here would silently return the wrong list. Until it is confirmed, any
+ * aggregate over these four categories is KNOWN to be short by whatever is
+ * filed under Coffee & Tea (31 Been and 4 Want-to-Try on the probed account).
  */
 export const Category = z.enum([
   "RES",
@@ -44,6 +57,18 @@ export const Category = z.enum([
   "OTHER",
 ]);
 export type Category = z.infer<typeof Category>;
+
+/**
+ * The category codes confirmed valid by GET /api/get-bookmark/ (which rejects
+ * an invalid code with a 500 rather than silently ignoring it).
+ *
+ * Deliberately NOT the full `Category` enum: these are the four that are known
+ * to work. This list is also known INCOMPLETE — the app's Coffee & Tea
+ * category has no confirmed code yet. Anything aggregating over it should say
+ * so rather than present the total as complete.
+ */
+export const CATEGORIES_CONFIRMED = ["RES", "BAR", "BAK", "DES"] as const;
+export type ConfirmedCategory = (typeof CATEGORIES_CONFIRMED)[number];
 
 /**
  * Human-facing sentiment bucket shown in the rank sheet, mapped to the numeric

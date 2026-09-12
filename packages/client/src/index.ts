@@ -28,3 +28,10 @@ export {
   type ListName,
   type ListSort,
 } from "./lists.js";
+
+export {
+  AccountLockoutError,
+  LoginBudgetError,
+  RequestGuard,
+  type GuardOptions,
+} from "./guard.js";

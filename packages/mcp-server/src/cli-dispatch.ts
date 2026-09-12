@@ -64,6 +64,7 @@ export async function runCli(argv: string[], config: Config): Promise<CliOutcome
         phone: config.phone,
         password: config.password,
         store: new FileSessionStore(config.sessionPath),
+        guard: { minIntervalMs: config.minIntervalMs },
       });
       await client.init();
       await client.login();
@@ -85,7 +86,10 @@ export async function runCli(argv: string[], config: Config): Promise<CliOutcome
   }
 
   if (cmd === "whoami") {
-    const client = new BeliClient({ store: new FileSessionStore(config.sessionPath) });
+    const client = new BeliClient({
+      store: new FileSessionStore(config.sessionPath),
+      guard: { minIntervalMs: config.minIntervalMs },
+    });
     await client.init();
     if (!client.isAuthenticated()) {
       process.stderr.write("(not logged in)\n");
@@ -117,6 +121,7 @@ export async function runCli(argv: string[], config: Config): Promise<CliOutcome
       phone: config.phone,
       password: config.password,
       store: new FileSessionStore(config.sessionPath),
+      guard: { minIntervalMs: config.minIntervalMs },
     });
     await client.init();
     const report = await runProbe({ client, config });

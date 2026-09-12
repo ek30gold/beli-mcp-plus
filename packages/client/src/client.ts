@@ -1,4 +1,5 @@
 import {
+  CATEGORIES_CONFIRMED,
   endpoints,
   LIST_FIELD,
   LoginRequest,
@@ -11,11 +12,18 @@ import {
 import type { z } from "zod";
 import { baseHeaders, BeliApiError, buildUrl, redactPasswordField } from "./http.js";
 import {
+  AccountLockoutError,
+  LoginBudgetError,
+  RequestGuard,
+  type GuardOptions,
+} from "./guard.js";
+import {
   filterListEntries,
   normalizeBeen,
   normalizeWantToTry,
   type ListBackend,
   type ListEntry,
+  type AggregatedList,
   type ListFilter,
   type ListName,
 } from "./lists.js";
@@ -66,6 +74,11 @@ export interface BeliClientOptions {
    * attempt is finished (whether or not it succeeded).
    */
   onAuthRequired?: () => Promise<void>;
+  /**
+   * Outbound safety rails (pacing, login budget, lockout breaker). Defaults are
+   * deliberately conservative; see guard.ts for why they exist at all.
+   */
+  guard?: GuardOptions;
 }
 
 interface RequestOpts {
@@ -85,17 +98,27 @@ export interface LoginCredentials {
 
 const ACCESS_SKEW_SECONDS = 120;
 
+/** Guard failures must never be absorbed by an auth fallback chain. */
+function rethrowIfGuardError(err: unknown): void {
+  if (err instanceof AccountLockoutError || err instanceof LoginBudgetError) {
+    throw err;
+  }
+}
+
 export class BeliClient {
   private state: SessionState = emptySession();
   private readonly store: SessionStore;
   private bootstrapped = false;
   private refreshInFlight: Promise<void> | null = null;
+  /** Every outbound request passes through this — see guard.ts. */
+  readonly guard: RequestGuard;
   private authHookInFlight: Promise<void> | null = null;
   private authHook?: () => Promise<void>;
 
   constructor(private readonly opts: BeliClientOptions = {}) {
     this.store = opts.store ?? new MemorySessionStore();
     this.authHook = opts.onAuthRequired;
+    this.guard = new RequestGuard(opts.guard);
   }
 
   /** Set/replace the interactive-login hook after construction. */
@@ -169,12 +192,14 @@ export class BeliClient {
     // fast and locally instead of round-tripping to the API.
     const payload = LoginRequest.parse(body);
     const e = endpoints.login;
+    await this.guard.beforeLogin();
     const res = await fetch(buildUrl(e.host, e.path), {
       method: "POST",
       headers: { ...baseHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const text = await res.text();
+    this.guard.noteResponse(res.status, text);
     // Never let a submitted password surface in a thrown error (which the CLI
     // and MCP tool results may print) even if the API echoed it back.
     if (!res.ok) throw new BeliApiError(res.status, e.id, redactPasswordField(text));
@@ -192,12 +217,14 @@ export class BeliClient {
   async refreshToken(): Promise<void> {
     if (!this.state.refresh) throw new Error("no refresh token");
     const e = endpoints.refresh;
+    await this.guard.beforeRequest();
     const res = await fetch(buildUrl(e.host, e.path), {
       method: "POST",
       headers: { ...baseHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ refresh: this.state.refresh }),
     });
     const text = await res.text();
+    this.guard.noteResponse(res.status, text);
     if (!res.ok) throw new BeliApiError(res.status, e.id, text);
     const { access } = e.response.parse(JSON.parse(text));
     const claims = readAccessClaims(access);
@@ -241,7 +268,13 @@ export class BeliClient {
       try {
         await this.refreshSingleFlight();
         return true;
-      } catch {
+      } catch (err) {
+        // A tripped breaker or spent login budget is NOT a "try the next auth
+        // method" condition — it is a stop condition. Swallowing it here would
+        // silently walk down the fallback chain and keep hitting an API that
+        // is already refusing this account, which is the exact behaviour that
+        // caused the lockout these guards exist to prevent.
+        rethrowIfGuardError(err);
         /* refresh token expired/invalid — fall through */
       }
     }
@@ -249,7 +282,8 @@ export class BeliClient {
       try {
         await this.login();
         return true;
-      } catch {
+      } catch (err) {
+        rethrowIfGuardError(err);
         /* bad credentials — fall through */
       }
     }
@@ -334,15 +368,22 @@ export class BeliClient {
         headers["Content-Type"] = "application/json";
         init.body = JSON.stringify(opts.body);
       }
+      await this.guard.beforeRequest();
       return fetch(url, init);
     };
 
     let res = await doFetch();
     if (res.status === 401 && e.auth) {
+      // Peek at the body before re-authenticating: a 401 that means "this
+      // account is inactive" must trip the breaker rather than trigger a
+      // re-auth loop against an account the API is already refusing.
+      const peek = await res.clone().text();
+      this.guard.noteResponse(res.status, peek);
       await this.authenticate(true);
       res = await doFetch();
     }
     const text = await res.text();
+    this.guard.noteResponse(res.status, text);
     if (!res.ok) throw new BeliApiError(res.status, e.id, text);
     const json = text ? JSON.parse(text) : {};
     return e.response.parse(json) as ResponseOf<K>;
@@ -393,6 +434,68 @@ export class BeliClient {
     return this.request("getRanking", {
       query: { user: user ?? this.requireUserId(), category },
     });
+  }
+
+  /**
+   * Fetch a personal list across EVERY confirmed category, not just one.
+   *
+   * `getBeen`/`getWantToTry` take a single category, and both endpoints
+   * require one. That made it easy to present a single category's rows as if
+   * they were the whole list: the probed account's Been list read as 388
+   * (restaurants) when the app showed 548 across all categories.
+   *
+   * The returned `incompleteReason` is the important part. `CATEGORIES_CONFIRMED`
+   * is KNOWN to be missing the app's Coffee & Tea category, whose code has
+   * never been confirmed, so even this aggregate is short. Callers must be able
+   * to say "this total is incomplete" rather than presenting it as final —
+   * quietly returning a plausible-looking wrong number is the failure being
+   * fixed here, and a four-category total presented as complete would just be a
+   * bigger version of the same bug.
+   */
+  private async listAllCategories(
+    list: ListName,
+    user?: string,
+  ): Promise<AggregatedList> {
+    const byCategory: Record<string, number> = {};
+    const failed: Record<string, string> = {};
+    const entries: ListEntry[] = [];
+
+    for (const category of CATEGORIES_CONFIRMED) {
+      try {
+        const rows =
+          list === "been"
+            ? normalizeBeen(await this.getBeen(category, user))
+            : normalizeWantToTry(await this.getWantToTry(category, user));
+        byCategory[category] = rows.length;
+        entries.push(...rows);
+      } catch (err) {
+        // A guard error means stop entirely, not "skip this category".
+        rethrowIfGuardError(err);
+        // Otherwise record the gap instead of silently dropping a category:
+        // a partial total that looks complete is the bug being fixed.
+        failed[category] = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    return {
+      entries,
+      byCategory,
+      failedCategories: failed,
+      incompleteReason:
+        "The app also has a Coffee & Tea category whose API code has never been " +
+        "confirmed (COFFEE is not it), so this total excludes it. Treat it as a " +
+        "lower bound, not the full list.",
+    };
+  }
+
+  /** Been list across every confirmed category. See {@link listAllCategories}. */
+  allBeen(user?: string): Promise<AggregatedList> {
+    return this.listAllCategories("been", user);
+  }
+
+  /** Want-to-Try across every confirmed category. See {@link listAllCategories}. */
+  allWantToTry(user?: string): Promise<AggregatedList> {
+    return this.listAllCategories("want_to_try", user);
   }
 
   async getWantToTry(category: Category = "RES", user?: string) {

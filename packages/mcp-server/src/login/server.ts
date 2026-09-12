@@ -35,7 +35,11 @@ export function runInteractiveLogin(
   return new Promise<LoginResult>((resolve, reject) => {
     const nonce = randomBytes(24).toString("base64url");
     const beli =
-      client ?? new BeliClient({ store: new FileSessionStore(config.sessionPath) });
+      client ??
+      new BeliClient({
+        store: new FileSessionStore(config.sessionPath),
+        guard: { minIntervalMs: config.minIntervalMs },
+      });
 
     let settled = false;
     const finish = (fn: () => void) => {
