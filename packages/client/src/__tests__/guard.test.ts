@@ -169,22 +169,34 @@ describe("BeliClient — uploadPhoto goes through the guard", () => {
     client.uploadPhoto({ businessId: 7316, image: new Uint8Array([1, 2, 3]) });
 
   it("paces uploads like any other request", async () => {
-    const times: number[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        times.push(Date.now());
-        return new Response('{"id": 123}', { status: 201 });
-      }),
-    );
-    const client = await makeClient({ minIntervalMs: 200 });
+    // Asserted by observing the guard rather than by wall-clock elapsed time:
+    // a real 200ms sleep makes the assertion a timing race on a loaded runner,
+    // and every other test in this file drives pacing through an injected
+    // clock for exactly that reason. Spying on beforeRequest proves the upload
+    // is gated by the same mechanism without waiting on a timer to prove it.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"id": 123}', { status: 201 })));
+    const client = await makeClient({ minIntervalMs: 0 });
+    const beforeRequest = vi.spyOn(client.guard, "beforeRequest");
 
     await upload(client);
     await upload(client);
 
-    expect(times).toHaveLength(2);
-    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(180);
+    expect(beforeRequest).toHaveBeenCalledTimes(2);
+    beforeRequest.mockRestore();
     vi.unstubAllGlobals();
+  });
+
+  it("actually waits between uploads, measured on an injected clock", async () => {
+    // The companion to the test above: this one proves the pacing MATH, using
+    // RequestGuard's injectable now/sleep so no real time passes.
+    const guard = new RequestGuard({ minIntervalMs: 200 });
+    const waits: number[] = [];
+    const sleep = async (ms: number) => void waits.push(ms);
+
+    await guard.beforeRequest(1_000, sleep);
+    await guard.beforeRequest(1_000, sleep); // a second upload at the same instant
+
+    expect(waits).toEqual([200]);
   });
 
   it("trips the breaker on a 429 from an upload, then fails locally", async () => {
