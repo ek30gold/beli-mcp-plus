@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import type { Business } from "@beli/contract";
 import { AppContext } from "../context.js";
-import { registerListSearchTools } from "../tools/lists.js";
+import { registerListSearchTools, registerListTools } from "../tools/lists.js";
 
 const biz = (id: number, name: string, over: Partial<Business> = {}): Business =>
   ({ id, name, ...over }) as Business;
@@ -153,5 +154,102 @@ describe("search_list tool", () => {
     });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("login");
+  });
+});
+
+describe("category enum — only live-confirmed codes are offered", () => {
+  // The tool layer previously listed the long forms (COFFEE, BAKERY, DESSERT,
+  // OTHER) that get-bookmark proves invalid (500) and get-ranking silently
+  // ignores (200 with zero rows), while omitting the confirmed BAK and DES.
+  const schemas = () => {
+    const { server, tools } = captureServer();
+    registerListTools(server, ctxWith({}));
+    registerListSearchTools(server, ctxWith({ searchList: async () => [] }));
+    return ["get_been", "get_want_to_try", "search_list"].map(
+      (name) => [name, tools.get(name)!.config.inputSchema.category] as const,
+    );
+  };
+
+  it("accepts every confirmed code (RES, BAR, BAK, DES)", () => {
+    for (const [name, schema] of schemas()) {
+      for (const code of ["RES", "BAR", "BAK", "DES"]) {
+        expect(schema.safeParse(code).success, `${name} must accept ${code}`).toBe(true);
+      }
+    }
+  });
+
+  it("rejects the long forms proven invalid by get-bookmark", () => {
+    for (const [name, schema] of schemas()) {
+      for (const code of ["COFFEE", "BAKERY", "DESSERT", "OTHER"]) {
+        expect(schema.safeParse(code).success, `${name} must reject ${code}`).toBe(false);
+      }
+    }
+  });
+
+  it("resolves the omitted category to each tool's intended default", () => {
+    // Asserting only that parsing SUCCEEDS would pass whichever default won,
+    // including the wrong one: `CategoryOrAll` wraps a `Category` that carries
+    // its own `.default("RES")`, so a shadowing bug here would silently send
+    // get_been back to restaurants-only — the undercount this project already
+    // fixed once. Pin the resolved VALUE, and note the two lists intend "all"
+    // while search_list intends a single category.
+    const expected: Record<string, string> = {
+      get_been: "all",
+      get_want_to_try: "all",
+      search_list: "RES",
+    };
+    for (const [name, schema] of schemas()) {
+      expect(schema.parse(undefined), `${name} default`).toBe(expected[name]);
+    }
+  });
+});
+
+/**
+ * Parse raw tool arguments the way the MCP SDK does before it calls a handler.
+ *
+ * The SDK runs the registered input shape through zod (`safeParseAsync`) and
+ * hands the handler `parseResult.data`, so schema defaults are already applied
+ * by the time handler code runs. `captureServer()` invokes handlers directly,
+ * which skips that step entirely — meaning a test that calls `handler({})` sees
+ * `category: undefined` and exercises a path production never takes. Going
+ * through the schema here keeps these tests honest about defaulting.
+ */
+function parseAsSdkWould(config: any, raw: Record<string, unknown>) {
+  return z.object(config.inputSchema).parse(raw);
+}
+
+describe("omitting category aggregates instead of silently returning one list", () => {
+  const spyClient = () => ({
+    allBeen: vi.fn(async () => ({ entries: [], byCategory: {}, failedCategories: {}, incompleteReason: "x" })),
+    getBeen: vi.fn(async () => ({ results: [] })),
+    allWantToTry: vi.fn(async () => ({ entries: [], byCategory: {}, failedCategories: {}, incompleteReason: "x" })),
+    getWantToTry: vi.fn(async () => ({})),
+  });
+
+  it.each([
+    ["get_been", "allBeen", "getBeen"],
+    ["get_want_to_try", "allWantToTry", "getWantToTry"],
+  ])("%s with no category calls %s, not %s", async (tool, aggregate, single) => {
+    const client = spyClient();
+    const { server, tools } = captureServer();
+    registerListTools(server, ctxWith(client as any));
+    const entry = tools.get(tool)!;
+
+    await entry.handler(parseAsSdkWould(entry.config, {}));
+
+    expect((client as any)[aggregate]).toHaveBeenCalledTimes(1);
+    expect((client as any)[single]).not.toHaveBeenCalled();
+  });
+
+  it("still honours an explicitly requested single category", async () => {
+    const client = spyClient();
+    const { server, tools } = captureServer();
+    registerListTools(server, ctxWith(client as any));
+    const entry = tools.get("get_been")!;
+
+    await entry.handler(parseAsSdkWould(entry.config, { category: "BAK" }));
+
+    expect(client.getBeen).toHaveBeenCalledWith("BAK", undefined);
+    expect(client.allBeen).not.toHaveBeenCalled();
   });
 });

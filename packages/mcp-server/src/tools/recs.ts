@@ -12,8 +12,10 @@ import { AppContext, guard, ok } from "../context.js";
  * build a tool around.
  *
  * The `/api/recs/` response's envelope IS confirmed live (a top-level
- * array), but individual item fields are not, so items are passed through
- * exactly as the API returned them rather than reshaped or narrowed. See
+ * array), and the item shape is confirmed too: every one of the probed
+ * account's 24,392 items carried `business_id` and `expected_percentile`,
+ * both numbers. Items are still passed through exactly as the API returned
+ * them - `RecItem` keeps `.passthrough()`, so unmodeled fields survive. See
  * `RecItem`/`RecsResponse` in `@beli/contract`'s recs schema for the full
  * evidence note.
  */
@@ -25,13 +27,13 @@ export function registerRecsTools(server: McpServer, ctx: AppContext): void {
       description:
         "Fetch a user's personalized recommendations from the Beli recs " +
         "service (GET /api/recs/{uuid}/). Omit userId for yourself. " +
-        "CONFIRMED live: the response is a top-level array of items. The " +
-        "shape of an individual item was NOT confirmed by the live probe, " +
-        "so items are returned exactly as the API sent them — treat their " +
-        "fields as unverified rather than assuming names like " +
-        "'business_id' or 'score'. The list is large (tens of thousands of " +
-        "items on a real account), so results are paged — use offset/limit " +
-        "to walk it rather than expecting one call to return everything.",
+        "CONFIRMED live: the response is a top-level array of items, and " +
+        "every item carries business_id and expected_percentile (both " +
+        "numbers, verified on all 24,392 items of the probed account). " +
+        "Unmodeled fields pass through untouched. The list is large (tens " +
+        "of thousands of items on a real account), so results are paged - " +
+        "use offset/limit to walk it rather than expecting one call to " +
+        "return everything.",
       inputSchema: {
         userId: z.string().uuid().optional(),
         limit: z.number().int().min(1).max(500).default(50),
@@ -43,7 +45,8 @@ export function registerRecsTools(server: McpServer, ctx: AppContext): void {
       await ctx.throttle();
       const res = await ctx.client.getRecs(userId);
       // Confirmed envelope is a bare array; a {results:[...]} wrapper is
-      // accepted too (see RecsResponse) but never actually observed.
+      // accepted too (see RecsResponse) but never actually observed. Item
+      // shape is confirmed as well (business_id / expected_percentile).
       const items = Array.isArray(res) ? res : res.results;
       // The endpoint has no server-side paging parameter we have confirmed,
       // so it always returns the full list (24,392 items on the probed
@@ -60,7 +63,8 @@ export function registerRecsTools(server: McpServer, ctx: AppContext): void {
         limit: lim,
         returned: page.length,
         hasMore: off + page.length < items.length,
-        itemShapeConfirmed: false,
+        itemShapeConfirmed: true,
+        itemShape: { business_id: "number", expected_percentile: "number" },
         items: page,
       });
     }),

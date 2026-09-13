@@ -141,3 +141,92 @@ describe("BeliClient — the incident, reproduced", () => {
     await expect(guard.beforeLogin(300, nowait)).rejects.toBeInstanceOf(LoginBudgetError);
   });
 });
+
+describe("BeliClient — uploadPhoto goes through the guard", () => {
+  // uploadPhoto used to call fetch directly: no pacing, and the breaker never
+  // saw a 429/user_inactive coming back from an upload. Every outbound call
+  // must pass through the guard, writes included.
+  const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const freshJwt = () => {
+    const exp = Math.floor(Date.now() / 1000) + 1200;
+    return `h.${b64u({ exp, user_id: "11111111-1111-1111-1111-111111111111" })}.s`;
+  };
+  const makeClient = async (guardOpts: ConstructorParameters<typeof RequestGuard>[0]) => {
+    const store = new MemorySessionStore();
+    const exp = Math.floor(Date.now() / 1000) + 1200;
+    store.save({
+      access: freshJwt(),
+      refresh: null,
+      userId: "11111111-1111-1111-1111-111111111111",
+      accessExp: exp,
+    });
+    const client = new BeliClient({ store, guard: guardOpts });
+    await client.init();
+    return client;
+  };
+
+  const upload = (client: BeliClient) =>
+    client.uploadPhoto({ businessId: 7316, image: new Uint8Array([1, 2, 3]) });
+
+  it("paces uploads like any other request", async () => {
+    // Asserted by observing the guard rather than by wall-clock elapsed time:
+    // a real 200ms sleep makes the assertion a timing race on a loaded runner,
+    // and every other test in this file drives pacing through an injected
+    // clock for exactly that reason. Spying on beforeRequest proves the upload
+    // is gated by the same mechanism without waiting on a timer to prove it.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"id": 123}', { status: 201 })));
+    const client = await makeClient({ minIntervalMs: 0 });
+    const beforeRequest = vi.spyOn(client.guard, "beforeRequest");
+
+    await upload(client);
+    await upload(client);
+
+    expect(beforeRequest).toHaveBeenCalledTimes(2);
+    beforeRequest.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("actually waits between uploads, measured on an injected clock", async () => {
+    // The companion to the test above: this one proves the pacing MATH, using
+    // RequestGuard's injectable now/sleep so no real time passes.
+    const guard = new RequestGuard({ minIntervalMs: 200 });
+    const waits: number[] = [];
+    const sleep = async (ms: number) => void waits.push(ms);
+
+    await guard.beforeRequest(1_000, sleep);
+    await guard.beforeRequest(1_000, sleep); // a second upload at the same instant
+
+    expect(waits).toEqual([200]);
+  });
+
+  it("trips the breaker on a 429 from an upload, then fails locally", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        return new Response("Too Many Requests", { status: 429 });
+      }),
+    );
+    const client = await makeClient({ minIntervalMs: 0 });
+
+    await expect(upload(client)).rejects.toThrow(/429/);
+    expect(client.guard.isTripped).toBe(true);
+    const afterFirst = calls;
+
+    await expect(upload(client)).rejects.toBeInstanceOf(AccountLockoutError);
+    expect(calls).toBe(afterFirst); // no further network traffic
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses to upload at all once the breaker has tripped", async () => {
+    const fetchMock = vi.fn(async () => new Response('{"id": 1}', { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = await makeClient({ minIntervalMs: 0 });
+    client.guard.noteResponse(401, "user_inactive");
+
+    await expect(upload(client)).rejects.toBeInstanceOf(AccountLockoutError);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
